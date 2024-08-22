@@ -5,11 +5,12 @@ import quantities
 import scipy as sc
 import scipy.optimize
 from matplotlib import pyplot as plt
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar, minimize
 from scipy import signal as sgnl
 import quantities as pq
 from abc import ABCMeta, abstractmethod
 from custom_exceptions import ScanrateExistsError, VoltageBoundsOutsideCVError, NoScanrateDefinedError
+from numba import jit
 
 
 def get_positive_and_negative_voltage_peaks(full_dataset):
@@ -560,22 +561,23 @@ class FullCV(CV):
         inner_area = np.sum(np.abs(self.difference_landscape)) * (potential_window / points_per_cycle)
         outer_area = ((max(data[:, 0]) - min(data[:, 0])) *
                       (max(data[:, 1]) - min(data[:, 1])))
-        print(f"Fill factor data eval, Potential window: {potential_window}, points_per_cycle: "
-              f"{points_per_cycle}, inner area: {inner_area}, outer area: {outer_area}")
+        #print(f"Fill factor data eval, Potential window: {potential_window}, points_per_cycle: "
+        #      f"{points_per_cycle}, inner area: {inner_area}, outer area: {outer_area}")
         return inner_area / outer_area
 
     # this function estimates the distortion parameter from the fill factor using the known equation for R-C-CVs and
     # via minimization, since the fill factor equation is not invertible.
     # Then, the theoretical vertical ratio is calculated and returned, as well as the distortion parameter.
     def estimate_vertical_current_ratio(self):
+        @jit
         def ff_difference(distortion_param):
             return np.abs(ff - (-2 * distortion_param + np.cosh(1 / (2 * distortion_param)) / np.sinh(
                 1 / (2 * distortion_param))))
 
         ff = np.array([self.fill_factor()])[0]
-        print(f"Fill factor: {ff}")
+        # print(f"Fill factor: {ff}")
         param_distortion = minimize_scalar(ff_difference, bounds=(0, 1e6), tol=1e-9)
-        print(f"Distortion param: {param_distortion.x}")
+        # print(f"Distortion param: {param_distortion.x}")
         vertical_ratio = (1 - np.exp(-1 / param_distortion.x)) / (1 + np.exp(-1 / param_distortion.x))
         return vertical_ratio, param_distortion
 
@@ -607,10 +609,10 @@ class FullCV(CV):
 
         capacitance_estimate /= vertical_ratio
         capacitance_estimate.units = pq.F
-        print(f"Vertical ratio {vertical_ratio}, capacitance {capacitance_estimate}")
+        # print(f"Vertical ratio {vertical_ratio}, capacitance {capacitance_estimate}")
         resistance_estimate = distortion_param.x * potential_window / (scanrate * capacitance_estimate)
         resistance_estimate.units = pq.Ohm
-        print(f"Resistance estimate: {resistance_estimate.__abs__()}")
+        # print(f"Resistance estimate: {resistance_estimate.__abs__()}")
         return resistance_estimate.__abs__(), capacitance_estimate, potential_window, distortion_param.x
 
     # Purpose: Determine, if the CV is influenced by underlying currents that shift or distort the capacitive CV.
@@ -619,11 +621,13 @@ class FullCV(CV):
     def bias_analysis(self):
         # return the difference between a target current ratio (here: measured) and the current ratio at a given p_d
         # These are the optimisation functions
+        @jit
         def current_ratio_first_quarter(distortion_param, target_current_ratio):
             return np.abs(target_current_ratio - (-1 + 2 /
                                                   (1 + np.sinh(3 / (8 * distortion_param)) /
                                                    np.cosh(1 / (8 * distortion_param)))))
 
+        @jit
         def current_ratio_third_quarter(distortion_param, target_current_ratio):
             res = np.abs(target_current_ratio - (-1 - 2 /
                                                  (-1 + np.sinh(3 / (8 * distortion_param)) /
@@ -631,11 +635,13 @@ class FullCV(CV):
             # print(f"Optimise: {res}, at distortion {distortion_param}")
             return res
 
+        @jit
         def get_current_ratio_by_distortion_param_first_quarter(distortion_param):
             return (-1 + 2 /
                     (1 + np.sinh(3 / (8 * distortion_param)) /
                      np.cosh(1 / (8 * distortion_param))))
 
+        @jit
         def get_current_ratio_by_distortion_param_third_quarter(distortion_param):
             return (-1 - 2 /
                     (-1 + np.sinh(3 / (8 * distortion_param)) /
@@ -744,6 +750,159 @@ class FullCV(CV):
 
         return ret
 
+    def fit_cv_by_optimisation(self):
+        # Split any CV into a forward and reverse scan part, to be able to apply segment-wise interpolation
+        # Then, run optimisation to find RC-parameter.
+        if self.scanrate is None:
+            raise NoScanrateDefinedError("No scanrate has been set for the CV.")
+
+        def index_exists(list_, index):
+            if 0 <= index <= len(list_):
+                return True
+            else:
+                return False
+        # Ensure the calculation here is done in SI base Units. If you're brave, figure out what happens to the units
+        # downstream otherwise, and rework the function.
+
+        previously_set_voltage = self.unit_voltage
+        previously_set_current = self.unit_current
+        self.convert_quantities(pq.V, pq.A)
+
+        # obtain the interpolated function in the forward or reverse direction
+        # first split the CV into the forward-backward directions, append them to a single array, and use
+        # scipy.InterpolateUnivariateSpline to calculate the integral.
+        # If desired, this could be changed to other interpolation modes.
+        if not self.default_filtered:
+            this_dataset_as_list = self.dataset
+        else:
+            this_dataset_as_list = self.get_filtered_dataset().tolist() * pq.dimensionless
+
+        scanrate = self.scanrate * self.unit_scanrate
+        scanrate.units = pq.V / pq.s
+        scanrate = scanrate.magnitude
+        # Now that the data is retrieved, return the CV to the set units.
+        self.convert_quantities(previously_set_voltage, previously_set_current)
+
+        # the peaks include the termination and the beginning of the cv as peaks (in negative_peaks if falling towards
+        # the point and/or rising from it, positive_peaks if rising towards and falling from the point.
+        # Sketching this out helps.
+        begins_upwards, negative_peaks, positive_peaks = get_positive_and_negative_voltage_peaks(
+            this_dataset_as_list)
+        # print(positive_peaks)
+        # print(negative_peaks)
+        # split the CV into halfcycles along the voltage peaks
+        sub_dataset_forward_direction = []
+        sub_dataset_reverse_direction = []
+
+
+        # FORWARD DIRECTION
+        if begins_upwards:
+            for i in range(len(positive_peaks)):
+                if index_exists(negative_peaks, i):
+                    sub_dataset_forward_direction = [*sub_dataset_forward_direction,
+                                                         *this_dataset_as_list[negative_peaks[i]:positive_peaks[i]]]
+        else:
+            # if the CV begins downwards, the first positive peak is the very beginning.
+            for i in range(1, len(positive_peaks)):
+                if index_exists(negative_peaks, i - 1):
+                    sub_dataset_forward_direction = [*sub_dataset_forward_direction,
+                                                         *this_dataset_as_list[
+                                                          negative_peaks[i - 1]:positive_peaks[i]]]
+
+        # REVERSE DIRECTION
+        if begins_upwards:
+            # if the CV begins upwards, the first negative peak is the very beginning.
+            for i in range(1, len(negative_peaks)):
+                if index_exists(positive_peaks, i - 1):
+                    sub_dataset_reverse_direction = [*sub_dataset_reverse_direction,
+                                                         *this_dataset_as_list[
+                                                          positive_peaks[i - 1]:negative_peaks[i]]]
+        else:
+            for i in range(len(negative_peaks)):
+                if index_exists(positive_peaks, i):
+                    sub_dataset_reverse_direction = [*sub_dataset_reverse_direction,
+                                                         *this_dataset_as_list[positive_peaks[i]:negative_peaks[i]]]
+
+
+        # Split off the voltage and current signals as 1d-lists
+        sub_dataset_forward_direction = sorted(sub_dataset_forward_direction, key=lambda l: l[0], reverse=False)
+        sub_dataset_reverse_direction = sorted(sub_dataset_reverse_direction, key=lambda l: l[0], reverse=True)
+
+        # create a timespace starting at 0 by assuming a linear scan rate.
+        # Note: For purposes of this calculation, we will pretend that the CV starts at V_min in forward direction at
+        # time 0. Because we are calculating assuming steady state, nothing at all changes in the result.
+        sub_dataset_forward_direction = np.array(sub_dataset_forward_direction)
+        time_domain = (sub_dataset_forward_direction[:, 0] - sub_dataset_forward_direction[0, 0])/scanrate
+        time_domain = time_domain.reshape(-1, 1)
+        #print(time_domain)
+        #print(f"Time domain {len(time_domain)}")
+        sub_dataset_forward_direction = np.hstack((time_domain, sub_dataset_forward_direction))
+        #print(sub_dataset_forward_direction)
+
+        sub_dataset_reverse_direction = np.array(sub_dataset_reverse_direction)
+        v_offset_at_reverse_scan_start = (np.max([sub_dataset_forward_direction[-1, 1],
+                                              sub_dataset_reverse_direction[0, 0]]) -
+                                          sub_dataset_forward_direction[0, 1])
+
+        #print(f"v_offset {v_offset_at_reverse_scan_start}, end forward at {sub_dataset_forward_direction[-1, 1]},"
+        #      f"beginning reverse at {sub_dataset_reverse_direction[0, 0]}, scanrate {scanrate}")
+        time_domain = (-(sub_dataset_reverse_direction[:, 0] - (np.max([sub_dataset_forward_direction[-1, 1],
+                                              sub_dataset_reverse_direction[0, 0]]))) + v_offset_at_reverse_scan_start)/scanrate
+        time_domain= time_domain.reshape(-1, 1)
+        #print(f"Time domain reverse len {len(time_domain)}, printed {time_domain}")
+        sub_dataset_reverse_direction = np.hstack((time_domain, sub_dataset_reverse_direction))
+        #print(sub_dataset_reverse_direction)
+
+        #######################################################################
+        # FITTING of the data
+        #######################################################################
+
+        # Target functions in forward and reverse section of the CV. Vectorised to allow for efficient application to
+        # the entire timespace.
+        # Since A and T can be concluded from the dataset, they need not be optimised.
+        A = (np.max([np.max(sub_dataset_forward_direction[:, 1]), np.max(sub_dataset_reverse_direction[:, 1])]) -
+             np.min([np.min(sub_dataset_forward_direction[:, 1]), np.min(sub_dataset_reverse_direction[:, 1])]))/2
+        T = sub_dataset_reverse_direction[-1, 0] - sub_dataset_forward_direction[0, 0]
+        @jit
+        def forward_current(t, R, C):
+            return (-8 * A * C / T) * np.exp(-t / (R * C)) / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T
+        forward_vectorized = np.vectorize(forward_current)
+
+        @jit
+        def reverse_current(t, R, C):
+            return (8 * A * C / T) * np.exp((-t + T) / (R * C)) / (1 + np.exp(T / (2 * R * C))) - 4 * A * C / T
+        reverse_vectorized = np.vectorize(reverse_current)
+
+        def target_function_optimisation(params):
+            R = params[0]
+            C = params[1]
+            forward_difference = (forward_vectorized(sub_dataset_forward_direction[:, 0], R=R, C=C) -
+                                  sub_dataset_forward_direction[:, 2])
+            reverse_difference = (reverse_vectorized(sub_dataset_reverse_direction[:, 0], R=R, C=C) -
+                                  sub_dataset_reverse_direction[:, 2])
+            # print(f"R {R}, C {C}")
+            # print(f"forward {np.sum(np.abs(forward_difference))}, reverse {np.sum(np.abs(reverse_difference))}")
+            # print(f"tar-fun {np.sqrt(np.sum(np.abs(forward_difference))) + np.sqrt(np.sum(np.abs(reverse_difference)))}")
+            return (np.sqrt(np.sum(np.square(forward_difference))/len(forward_difference)) +
+                    np.sqrt(np.sum(np.square(reverse_difference))/len(reverse_difference)))
+
+        # The initial guess is critical to convergence of the algorithm. If it is too far off, the target function
+        # for one branch or the other may return nan or np.inf, disorienting the search.
+        # Here, the analytical distortion param evaluation is called for providing the initial guess. Even though it is
+        # sensitive to fill factor-error introduced by noise, it will be in the ballpark.
+
+        res_initial, cap_initial, window, p_d = self.distortion_param_evaluation()
+        initial_values = np.array([res_initial, cap_initial])
+        print(f"Initial pd values: res {res_initial}, cap {cap_initial}, window {window}, pd {p_d}")
+        # Optimise with the initial values, bounds are set to exclude negative values.
+        opt = minimize(target_function_optimisation, initial_values , bounds=((0, None), (0, None)),
+                       method='Nelder-Mead')
+        # print(opt)
+        optimal_R, optimal_C = opt.x
+
+        distortion_param = scanrate * optimal_C * optimal_R/(2*A)
+        print(f"Optimisation complete: R {optimal_R}, C {optimal_C}, W  {2*A}, p_d {distortion_param}")
+        return optimal_R * pq.Ohm , optimal_C * pq.F, 2*A * pq.V, distortion_param
 
 class HalfCV(CV):
     index: int

@@ -7,7 +7,7 @@ import quantities as pq
 from scipy import optimize as opt
 import PySimpleGUI as sg
 from custom_exceptions import ScanrateExistsError, NotEnoughCVsToFitError, CycleIndexOutOfBoundsError, \
-    NoCycleInformationError, NoScanrateDefinedError
+    NoCycleInformationError, NoScanrateDefinedError, UnknownMethodError
 from datetime import datetime
 
 # These are the signifying keywords for current and voltage in the CV datasets.
@@ -825,19 +825,25 @@ class Dataset:
             print("There are no datasets loaded that could be written.")
             return False
 
-    def write_distortion_param_results_to_file(self, filename):
+    def write_distortion_param_results_to_file(self, filename, method):
         # create the data list to write, a 2D array of caption, then results
         write_list = [["CV No.", "Source file", "Resistance [Ohm]", "Capacitance [F]", "Scan rate [mV/s]", "p_d",
                        "Potential window[V]"]]
         for cv in self.contents:
             if cv.is_active():
                 try:
-                    resistance, capacitance, potential_window, p_d = cv.distortion_param_evaluation()
+                    if method == "Analytical":
+                        resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+                    elif method == "Optimisation enhanced analytical":
+                        resistance, capacitance, potential_window, distortion_param = cv.fit_cv_by_optimisation()
+                    if not 'resistance' in locals():
+                        raise UnknownMethodError("Method string code was unrecognised.")
                     write_list.append([cv.get_index(), cv.get_source(), resistance.magnitude, capacitance.magnitude,
-                                       cv.get_scanrate(dimension=pq.mV/pq.s).magnitude, p_d, potential_window])
+                                       cv.get_scanrate(dimension=pq.mV/pq.s).magnitude, distortion_param, potential_window])
                 except NoScanrateDefinedError:
                     print(f"CV no. {cv.get_index()} failed to evaluate, due to lack of scan rate. "
                           f"Writing process proceeds without it.")
+
         # Here, the writeable dataset is created, and can be fed to the default-writing routine created above. Return
         # the success boolean that gets returned from the writing function.
         return write_standardized_data_file(filename=filename, data_to_write=write_list)

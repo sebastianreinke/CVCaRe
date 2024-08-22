@@ -9,8 +9,10 @@ import quantities as pq
 import os.path
 from CV import FullCV
 from custom_exceptions import NotEnoughCVsToFitError, VoltageBoundsOutsideCVError, FunctionNotImplementedError, \
-    ScanrateExistsError, NoScanrateDefinedError
+    ScanrateExistsError, NoScanrateDefinedError, UnknownMethodError
 import Dataset
+from numba import jit
+
 
 ########################################################################################################################
 # GLOBAL SETTINGS
@@ -38,11 +40,12 @@ color_cycle = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', '
 # HELPER FUNCTIONS FOR THE PROPER CREATION OF THE GUI AND CALLING THE DATASET METHODS
 ########################################################################################################################
 
-
 def calculate_RC_cv(Res, Cap, T_p, Amp):
+    @jit(nopython=True)
     def forward_current(t, A, T, R, C):
         return (-8 * A * C / T) * np.exp(-t / (R * C)) / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T
 
+    @jit(nopython=True)
     def backward_current(t, A, T, R, C):
         return (8 * A * C / T) * np.exp((-t + T) / (R * C)) / (1 + np.exp(T / (2 * R * C))) - 4 * A * C / T
 
@@ -73,8 +76,10 @@ def calculate_RC_cv(Res, Cap, T_p, Amp):
 
     res = np.stack((voltage, current), axis=1)
     # Write the interpolation to a file
-    Dataset.write_standardized_data_file(f"Z:/Research/Carbon coated electrodes in different electrolytes/"
-                                         f"interp_R_{Res}_C_{Cap}_T_{T_p}_A_{Amp}.txt", res)
+    #if write_to_file != "":
+    #    write_success = Dataset.write_standardized_data_file(write_to_file, res)
+    #    if not write_success:
+    #        sg.PopupError("The interpolated CV failed to write.")
     return res
 
 
@@ -517,10 +522,9 @@ file_column = [
     [sg.VPush()],
     [sg.HorizontalSeparator()],
     [sg.T('Select preferred units'), sg.Push(),
-     sg.DropDown(["A", "mA", "uA", "nA", "pA"], key=("-UNIT-", 0), readonly=True, default_value="A"),
-     sg.DropDown(["V", "mV", "uV"], key=("-UNIT-", 1), readonly=True, default_value="V"),
-     sg.DropDown(["F", "mF", "uF", "nF", "pF"], key=("-UNIT-", 2), readonly=True, default_value="mF"),
-     sg.B("Apply units", font=("Arial", 11))],
+     sg.DropDown(["A", "mA", "uA", "nA", "pA"], key=("-UNIT-", 0), readonly=True, default_value="A", enable_events=True),
+     sg.DropDown(["V", "mV", "uV"], key=("-UNIT-", 1), readonly=True, default_value="V", enable_events=True),
+     sg.DropDown(["F", "mF", "uF", "nF", "pF"], key=("-UNIT-", 2), readonly=True, default_value="mF", enable_events=True)],
     [sg.HorizontalSeparator()],
     [sg.InputText(key=("cv", 1),
                   default_text=""),
@@ -569,13 +573,18 @@ capacitance_column = [[sg.Text("Capacitance Calculation", font=("Calibri", 16, "
                       [sg.Text("Export to file:"), sg.InputText(default_text='capacitance.txt', key="cap_save"),
                        sg.FileSaveAs(font=("Arial", 11))],
                       [sg.Button('Save Capacitance', font=("Arial", 11)),
+                       sg.Button('Save chosen CV No. CaRe fit', font=("Arial", 11)),
                        sg.Button('Save bulk distortion analysis', font=("Arial", 11))]]
 
 advanced_column = [[sg.Text("Advanced CV calculations", font=("Calibri", 16, "bold"))],
                    [sg.HorizontalSeparator()],
                    [sg.Text("Read in full cycle?"), sg.Combo(["full cycles", "forward", "reverse"],
                                                              key='halfcycle_mode', default_value="full cycles",
-                                                             enable_events=False, readonly=True)],
+                                                             enable_events=False, readonly=True),
+                    sg.Text("CaRe calculation method"), sg.Combo(["Analytical", "Optimisation enhanced analytical"],
+                                                             key='care_calculation_mode', default_value="Analytical",
+                                                             enable_events=False, readonly=True)
+                    ],
                    [sg.HorizontalSeparator()],
                    [sg.T("Use CV No.:", font=("Calibri", 14, "bold")),
                     sg.InputText(key=("advanced", "index"), size=5),
@@ -601,12 +610,17 @@ advanced_column = [[sg.Text("Advanced CV calculations", font=("Calibri", 16, "bo
                                                                         size=20)]
                    ]
 
-# @TODO , 'Export all CVs as cycle splits'
-menu_def = ['&CV', ['&Load and preview CVs', '&Clear all', '---', 'C&lose']], \
-    ['&Save', ['&Write CVs to file', 'Save capacitance calculation']], ['&Edit', ['&Add Row', 'Copy first row inputs '
-                                                                                              'to all']], \
+
+menu_def = (
+    ['&CV',
+            ['&Load and preview CVs', '&Clear all', '---', 'C&lose']],
+    ['&Save',
+            ['&Write CVs to file', 'Save capacitance calculation', 'Save chosen CV No. CaRe fit',
+             'Save bulk distortion analysis']],
+    ['&Edit',
+            ['&Add Row', 'Copy first row inputs to all']],
     ['Advanced Settings',
-     ['Load partial CVs', 'Bias analysis', 'Save bulk distortion analysis', 'Cycle split all files']]
+            ['Load partial CVs', 'Bias analysis', 'Cycle split all files']])
 
 layout = [
     # [sg.Titlebar("Magical Mystery tool for capacitive CVs")],
@@ -633,7 +647,7 @@ layout = [
 ]
 
 window = sg.Window('CV Analysis and Export', layout, finalize=True, font='Helvetica', grab_anywhere=True,
-                   resizable=True)
+                   resizable=True, icon="Z:\Research\CVCaRe\cvcare\cvcare.ico")
 # size=(1750, 925)
 
 # this metadata variable is the property of the main window and is used here to hold the number of rows of input
@@ -669,7 +683,7 @@ while True:
             window[('cv', i)].update("")
             window[('sr', i)].update("")
 
-    if event == 'Apply units':
+    if isinstance(event, tuple) and event[0] == "-UNIT-":
         loaded_data = Dataset.Dataset(values, window.metadata, window)
         setUnits[0] = eval("pq" + "." + values[("-UNIT-", 0)])
         setUnits[1] = eval("pq" + "." + values[("-UNIT-", 1)])
@@ -906,9 +920,12 @@ while True:
                 raise FunctionNotImplementedError("This function is only implemented for full CVs.")
 
             # Take the dataset and request that it perform the distortion analysis, returning resistance, capacitance,
-            # distortion parameter and potential window.
+            # distortion parameter and potential window. Choice of method.
 
-            resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+            if values["care_calculation_mode"] == "Analytical":
+                resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+            elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
+                resistance, capacitance, potential_window, distortion_param = cv.fit_cv_by_optimisation()
 
             # Obtain the voltage amplitude = half the potential window for the theoretical calculation.
             amplitude = cv.get_amplitude()
@@ -1005,13 +1022,18 @@ while True:
                 transfer_scanrates_to_dataset()
 
                 # perform the analysis and write it to file
-                success = loaded_data.write_distortion_param_results_to_file(values["cap_save"])
+                success = loaded_data.write_distortion_param_results_to_file(values["cap_save"], values["care_calculation_mode"])
                 if success:
                     sg.PopupOK("Successfully written the distortion parameter analysis to the specified file.")
                 else:
                     sg.PopupError("The writing process was not successful.")
             except FunctionNotImplementedError as e:
                 sg.PopupError(e)
+            except UnknownMethodError as e:
+                sg.PopupError("Method string was unrecognised in Dataset.write_distortion_param_results_to_file(). "
+                      "This should not happen. Check the integrity of the source code.")
+                print("Method string was unrecognised in Dataset.write_distortion_param_results_to_file(). "
+                      "This should not happen. Check the integrity of the source code.")
 
     if event == "Cycle split all files":
         for i in range(1, window.metadata + 1):
@@ -1021,5 +1043,68 @@ while True:
             except Exception as e:
                 print(f"Error writing split cycle data: {e}")
 
+    if event == "Save chosen CV No. CaRe fit":
+        try:
+            # First, collect all the user inputs to perform the calculation.
+            transfer_scanrates_to_dataset()
+            apply_filter_settings_to_dataset(values, loaded_data)
+            # collect the data from the GUI
+            cv_no = int(values[("advanced", "index")])
+            cv = loaded_data.get_content_by_index(cv_no)
+            if cv is None:
+                raise ValueError("Invalid cycle index!")
+            if not isinstance(cv, FullCV):
+                raise FunctionNotImplementedError("This function is only implemented for full CVs.")
+            # Take the dataset and request that it perform the distortion analysis, returning resistance, capacitance,
+            # distortion parameter and potential window. Choice of method.
+
+            if values["care_calculation_mode"] == "Analytical":
+                resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+            elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
+                resistance, capacitance, potential_window, distortion_param = cv.fit_cv_by_optimisation()
+
+            # Obtain the voltage amplitude = half the potential window for the theoretical calculation.
+            amplitude = cv.get_amplitude()
+            amplitude.units = pq.V
+            T_p_calc = 4 * amplitude / cv.get_scanrate(pq.V / pq.s)
+            T_p_calc.units = pq.s
+
+            fitted_cv = calculate_RC_cv(Res=resistance.magnitude,
+                                        Cap=capacitance.magnitude,
+                                        Amp=amplitude.magnitude,
+                                        T_p=T_p_calc.magnitude)
+            # correction shift of fitted CV. The theoretical calculation assumes base SI-units. They can therefore
+            # be appended here, and then the calculation is adjusted to the selected user-units.
+
+            # The voltage slice is unit-converted, and shifted to coincide with the loaded dataset.
+            voltage_slice = fitted_cv[:, 0] * pq.V
+            voltage_slice = voltage_slice.rescale(setUnits[1])
+            voltage_corrector = min(cv.dataset[:, 0]) * cv.unit_voltage
+            voltage_slice += voltage_corrector
+
+            # The current slice is unit-converted, and shifted to coincide with the loaded dataset.
+            current_slice = fitted_cv[:, 1] * pq.A
+            current_slice = current_slice.rescale(setUnits[0])
+            current_corrector = (min(cv.dataset[:, 1]) * cv.unit_current - min(current_slice))
+            current_slice += current_corrector
+            # the adjusted calculated CV dataset is reassembled by stacking along the vertical axis, and entered into
+            # the dictionary for access via the plotting function.
+            fitted_cv = np.stack((voltage_slice.magnitude, current_slice.magnitude), axis=1)
+            # Convert the array to a list of lists
+            fitted_cv_list = fitted_cv.tolist()
+            # Insert the title row
+            title_row = [f"Voltage [{voltage_slice.units}]", f"Current [{current_slice.units}]"]
+            fitted_cv_list.insert(0, title_row)
+
+            # Write the interpolation to a file
+            write_success = Dataset.write_standardized_data_file(values["cap_save"], fitted_cv_list)
+            if not write_success:
+                sg.PopupError("The interpolated CV failed to write.")
+        except FunctionNotImplementedError as e:
+            sg.PopupError(e)
+        except NoScanrateDefinedError:
+            sg.PopupError('No scanrate is defined for this CV.')
+        except ValueError or AttributeError as e:
+            sg.PopupError("The CV index may not exist, or the inputs are not of the correct data type.")
 
 window.close()
