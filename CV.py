@@ -3,29 +3,48 @@ from functools import partial
 import numpy as np
 import quantities
 import scipy as sc
-import scipy.optimize
-from matplotlib import pyplot as plt
+from quantities.quantity import Quantity
 from scipy.optimize import minimize_scalar, minimize
 from scipy import signal as sgnl
 import quantities as pq
 from abc import ABCMeta, abstractmethod
 from custom_exceptions import ScanrateExistsError, VoltageBoundsOutsideCVError, NoScanrateDefinedError
-from numba import jit
+from helper_functions import time_this_function
+
+
+# from numba import jit
 
 
 def get_positive_and_negative_voltage_peaks(full_dataset):
     direction_upwards = True
-    if full_dataset[40][0] < full_dataset[0][0]:
+
+    # Mode switch for low-resolution datasets
+    is_low_resolution = False
+    if len(full_dataset) < 200:
+        is_low_resolution = True
+
+    # Truncation indices - choose as necessary. The beginning and end of CV is often noisy, or filled with artefacts,
+    # and how far to cut around them is a tradeoff. Empirically, 40 - 10 works well for highly sampled CVs.
+    # Note: truncate must always be >= than the lookahead, otherwise it triggers an IndexOutOfBoundsException.
+    truncate = (40, 10)
+
+    # How far to check around a peak to detect it
+    lookahead = 10
+    if is_low_resolution:
+        truncate = (5, 5)
+        lookahead = 3
+
+    if full_dataset[truncate[0]][0] < full_dataset[0][0]:
         direction_upwards = False
     positive_peaks = []
     negative_peaks = []
     # iterate over all candidate center-elements in a len-3 comparison filter => exclude first and last element
-    for index in range(40, len(full_dataset) - 10):
+    for index in range(truncate[0], len(full_dataset) - truncate[1]):
         if full_dataset[index - 1, 0] < full_dataset[index, 0] > full_dataset[index + 1, 0] and \
-                full_dataset[index - 10, 0] < full_dataset[index, 0] > full_dataset[index + 10, 0]:
+                full_dataset[index - lookahead, 0] < full_dataset[index, 0] > full_dataset[index + lookahead, 0]:
             positive_peaks.append(index)
         if full_dataset[index - 1, 0] > full_dataset[index, 0] < full_dataset[index + 1, 0] and \
-                full_dataset[index - 10, 0] > full_dataset[index, 0] < full_dataset[index + 10, 0]:
+                full_dataset[index - lookahead, 0] > full_dataset[index, 0] < full_dataset[index + lookahead, 0]:
             negative_peaks.append(index)
     # positive_peaks = sgnl.find_peaks(full_dataset[:, 0])
     # negative_peaks = sgnl.find_peaks(-1*full_dataset[:, 0])
@@ -142,6 +161,144 @@ class CV(metaclass=ABCMeta):
 # Note: This is called with a Dataset in the dimensions that are specified with unit_voltage, unit_current at creation
 # Unit conversion is performed in-place (and we pray for no conversion glitches).
 class FullCV(CV):
+    """
+    Represents a single full cyclic voltammetry (CV) dataset and provides methods for internal calculations and data retrieval.
+
+    The `FullCV` class is designed to handle and process a full cycle CV dataset. It allows for internal calculations such as
+    creating a difference landscape, converting data units, calculating capacitance, and analyzing the CV for distortion
+    parameters. The class stores the relevant data and metadata, and provides various methods to access or manipulate these
+    data.
+
+    Attributes:
+        index (int):
+            The index of this CV within a larger dataset.
+
+        dataset (np.array):
+            A 2D NumPy array containing the voltage and current data for this CV. Note: This dataset is unit-free.
+
+        eval_voltage (float):
+            The voltage at which the current evaluation is performed.
+
+        difference_landscape (list):
+            A list of current differences between the forward and reverse scans at corresponding voltage points.
+
+        cycle_nr (int):
+            The cycle number associated with this CV.
+
+        source (str):
+            The source file name from which this CV was loaded.
+
+        scanrate (float):
+            The scan rate at which this CV was measured, in units defined by `unit_scanrate`. Defaults to None if not set.
+
+        active (bool):
+            Indicates whether this CV is active for analysis. Defaults to True.
+
+        default_filtered (bool):
+            Indicates whether the default filtered dataset should be used for calculations. Defaults to False.
+
+        unit_voltage (quantities.Quantity):
+            The unit of voltage used in the dataset, provided during initialization.
+
+        unit_current (quantities.Quantity):
+            The unit of current used in the dataset, provided during initialization.
+
+        unit_scanrate (quantities.Quantity or None):
+            The unit of scan rate, set when the scan rate is defined.
+
+    Methods:
+        __init__(self, source: str, cycle_nr: int, index: int, dataset: list, eval_voltage, unit_voltage, unit_current):
+            Initializes the FullCV object with the provided dataset, metadata, and units. Creates the difference landscape.
+            Sets the initial values for various attributes like `index`, `dataset`, `eval_voltage`, `cycle_nr`,
+            `unit_voltage`, `unit_current`, and others.
+
+        get_eval_voltage(self):
+            Returns the evaluation voltage for this CV.
+
+        get_index(self) -> int:
+            Returns the index of this CV.
+
+        get_dataset(self):
+            Returns the dataset as a NumPy array.
+
+        get_type(self):
+            Placeholder method that calls the superclass method.
+
+        get_cycle_nr(self):
+            Returns the cycle number of this CV.
+
+        set_active(self, is_active: bool):
+            Sets the active status of this CV.
+
+        is_active(self):
+            Returns whether this CV is active for analysis.
+
+        get_source(self):
+            Returns the source file name of this CV.
+
+        set_scanrate(self, scanrate: float, dimension: quantities.Quantity):
+            Sets the scan rate and its unit for this CV.
+
+        get_scanrate(self, dimension: quantities.Quantity):
+            Returns the scan rate in the specified units. Raises an error if the scan rate is not set.
+
+        set_default_filtered(self, filtered: bool):
+            Sets the default filtering status of this CV.
+
+        get_default_filtered(self):
+            Returns the default filtering status of this CV.
+
+        get_amplitude(self):
+            Returns the voltage amplitude of this CV, calculated as half the difference between the maximum and minimum voltages.
+
+        get_filtered_dataset(self):
+            Returns the dataset after applying a Savitzky-Golay filter for smoothing.
+
+        get_difference_landscape(self):
+            Returns the difference landscape calculated for this CV.
+
+        convert_quantities(self, unit_voltage, unit_current):
+            Converts the voltage and current data in the dataset to the specified units.
+
+        get_minmax_current(self):
+            Returns the difference between the maximum and minimum currents in the dataset.
+
+        get_current_at_voltage_in_halfcycle(self, half_cycle_select, voltage_position=None, current_dimension: pq.Quantity = None):
+            Returns the current at the specified voltage within the selected half-cycle (anodic or cathodic).
+
+        get_current_at_voltage(self, voltage_position=None, current_dimension: pq.Quantity = None, query_forward_backward_separately=False):
+            Retrieves the current at a specified voltage position, with options to query forward and backward scans separately.
+
+        create_difference_landscape(self):
+            Creates and stores the difference landscape between the forward and reverse scans in the dataset.
+
+        integrate_one_direction(self, lower_voltage_bound: float, upper_voltage_bound: float, forward_direction: bool = True, filtered: bool = False, offset: float = None):
+            Integrates the current over a specified voltage range in either the forward or reverse direction.
+
+        register_eval_voltage(self):
+            Determines and sets the evaluation voltage based on the maximum difference in the difference landscape.
+
+        collapse_to_writable_list(self, filtered: bool = False, comment: str = None):
+            Prepares the dataset and metadata as a list suitable for writing to a file.
+
+        true_interfacial_scanrate(self, resistance):
+            Calculates the true interfacial scan rate, accounting for the IR drop over the specified resistance.
+
+        fill_factor(self):
+            Calculates the fill factor, a measure of the CV's distortion, normalized to the potential window and current range.
+
+        estimate_vertical_current_ratio(self):
+            Estimates the vertical current ratio and distortion parameter based on the fill factor.
+
+        distortion_param_evaluation(self):
+            Evaluates the CV using an analytical method to determine capacitance, resistance, and distortion parameters.
+
+        bias_analysis(self):
+            Analyzes the CV for bias, comparing current ratios at specific points in the potential window with those expected from the fill factor.
+
+        fit_cv_by_optimisation(self):
+            Optimizes the resistance, capacitance, and offset parameters using an optimization algorithm based on the RC model.
+    """
     index: int
     dataset: np.array
     eval_voltage: float
@@ -163,10 +320,13 @@ class FullCV(CV):
         self.unit_current = unit_current
         self.create_difference_landscape()
         self.active = True
+
         if eval_voltage is None:
             self.register_eval_voltage()
         else:
             self.eval_voltage = eval_voltage
+        # print(
+        #     f"Registered Full CV {index}, unit voltage {unit_voltage}, unit current {unit_current}, eval voltage {self.eval_voltage}")
 
     def get_eval_voltage(self):
         return self.eval_voltage
@@ -224,19 +384,59 @@ class FullCV(CV):
         return self.difference_landscape
 
     def convert_quantities(self, unit_voltage, unit_current):
+        """
+        Converts the voltage and current data in the dataset to the specified units.
+
+        This method converts the voltage and current values in the cyclic voltammetry (CV) dataset to the specified units.
+        It also updates the `eval_voltage` and the internal unit attributes (`unit_voltage` and `unit_current`) to match
+        the new units. The conversion process is necessary when the dataset needs to be analyzed or compared using
+        different units than those originally provided.
+
+        Parameters:
+            unit_voltage (pq.Quantity):
+                The desired unit for the voltage data. This should be a `quantities` unit (e.g., `pq.V` for volts).
+
+            unit_current (pq.Quantity):
+                The desired unit for the current data. This should be a `quantities` unit (e.g., `pq.A` for amperes).
+
+        Internal Operations:
+            - The method first multiplies the voltage and current values by their respective current units to convert
+              them into `quantities` objects.
+            - It then assigns the new units to the voltage, `eval_voltage`, and current data.
+            - The `.magnitude` attribute is used to extract the numerical values from the `quantities` objects after
+              unit conversion.
+            - The dataset is then updated with the converted voltage and current values.
+            - Finally, the method updates the internal `unit_voltage` and `unit_current` attributes to reflect the new units.
+
+        Notes:
+            - This method modifies the state of the object by updating the dataset, `eval_voltage`, and unit attributes.
+            - Ensure that the units provided are compatible with the data in the dataset to avoid any unit-related errors.
+
+        Example Usage:
+            ```python
+            # Convert the dataset to millivolts and microamperes
+            convert_quantities(pq.mV, pq.uA)
+            ```
+
+        """
         voltage = self.dataset[:, 0] * self.unit_voltage
         current = self.dataset[:, 1] * self.unit_current
         eval_voltage = self.eval_voltage * self.unit_voltage
         voltage.units = unit_voltage
         eval_voltage.units = unit_voltage
         current.units = unit_current
-        voltage /= unit_voltage
-        current /= unit_current
-        eval_voltage /= unit_voltage
+        # voltage /= unit_voltage
+        # current /= unit_current
+        # eval_voltage /= unit_voltage
+        voltage = voltage.magnitude
+        current = current.magnitude
+        eval_voltage = eval_voltage.magnitude
         self.unit_voltage = unit_voltage
         self.unit_current = unit_current
         self.eval_voltage = eval_voltage
         self.dataset = np.stack((voltage, current), axis=1)
+        # print(f"Quantity conversion called with voltage {unit_voltage}, current {unit_current}."
+        #       f"eval voltage is {self.eval_voltage}. Internal unit voltage {self.unit_voltage}")
 
     def get_minmax_current(self):
         if self.default_filtered:
@@ -288,7 +488,47 @@ class FullCV(CV):
                                voltage_position=None,
                                current_dimension: pq.Quantity = None,
                                query_forward_backward_separately=False):
+        """
+        Retrieves the current at a specified voltage position in the cyclic voltammetry (CV) dataset.
 
+        This method finds the current value corresponding to a specified voltage in the CV dataset. By default, it returns
+        the difference in current between the forward and backward scans at the closest match to the specified voltage.
+        The method assumes that the dataset is sampled at a reasonably equidistant rate in both the forward and backward
+        scans. If this assumption does not hold, erroneous near-zero current differences may appear, indicating the need
+        for further data analysis or interpolation.
+
+        Parameters:
+            voltage_position (float or None, optional):
+                The voltage at which to find the current. If None, the method uses `self.eval_voltage`.
+                The voltage should be provided as a scalar value, and the method will apply the appropriate unit internally.
+
+            current_dimension (pq.Quantity, optional):
+                The desired unit for the returned current. If specified, the current is returned in this unit.
+
+            query_forward_backward_separately (bool, optional):
+                If True, the method returns the current values separately for the forward and backward scans.
+                If False (default), the method returns the absolute difference between these currents.
+
+        Returns:
+            current_at_position (pq.Quantity):
+                The absolute difference in current between the forward and backward scans at the specified voltage.
+                If `query_forward_backward_separately` is True, returns a tuple:
+                    - max_curr (pq.Quantity): The maximum current (either forward or backward).
+                    - min_curr (pq.Quantity): The minimum current (either forward or backward).
+
+        Raises:
+            NoScanrateDefinedError: If the scan rate (`self.scanrate`) is not defined.
+
+        Notes:
+            - The method deletes the first-closest match to the desired voltage from the search space and searches again for
+              the next-closest match, assuming that the next match is from the opposite scan (forward or backward). This
+              assumption holds if the data is sampled at a consistent rate.
+            - If the voltage position is exactly between two identical potentials from both scans, the method may produce
+              near-zero differences, potentially indicating improper sampling or "ringing" effects.
+            - If `query_forward_backward_separately` is True, the method will return the individual current values for the
+              forward and backward scans, which may be useful for more detailed analysis.
+
+        """
         if voltage_position is None:
             voltage_position = self.eval_voltage
         else:
@@ -343,13 +583,49 @@ class FullCV(CV):
                 return (np.max([data[positive_closest, 1], searchspace[negative_closest, 1]]) * self.unit_current,
                         np.min([data[positive_closest, 1], searchspace[negative_closest, 1]]) * self.unit_current)
 
+    # @time_this_function
     def create_difference_landscape(self):
+        """
+        Creates a difference landscape between the forward and reverse scans in the cyclic voltammetry (CV) dataset.
+
+        This method calculates the absolute difference in current between corresponding voltage points in the forward and
+        reverse scans of the CV data. The difference landscape is a list of these current differences, which can be used
+        for further analysis of the CV behavior. The method is designed to handle both filtered and unfiltered datasets,
+        depending on the `default_filtered` attribute.
+
+        The calculation proceeds as follows:
+        1. For each data point in the CV dataset, find the closest matching voltage point in the opposite scan direction.
+        2. Calculate the absolute difference in current between the forward and reverse scans at these matched voltage points.
+        3. Handle cases where the closest match might be a neighboring point, which could lead to incorrect differences by
+           excluding these matches and searching for the next closest point.
+        4. If an error occurs during this process (e.g., due to incomplete cycles or other data issues), the method falls
+           back to a simpler calculation that may include nearest-neighbor matches, though this approach may compromise
+           the accuracy of the difference landscape.
+
+        The resulting difference landscape is stored in the `difference_landscape` attribute.
+
+        :raises Exception:
+            If an error occurs during the calculation, a warning is printed, and the method falls back to a less reliable
+            calculation method. This may happen if the dataset has incomplete cycles or other issues that prevent accurate
+            calculation of the current differences.
+
+        :note:
+            - It is assumed that the dataset is sampled at a reasonably equidistant rate in both the forward and reverse
+              scans. If this assumption does not hold, the difference landscape may include inaccuracies due to
+              nearest-neighbor matches.
+            - The method currently does not implement safeguards against next-neighbor selection for all cases. A
+              more robust solution might be to incorporate safeguards similar to those in the `get_current_at_voltage`
+              method to prevent such issues.
+
+        :warning:
+            - If the fallback calculation method is used, the difference landscape should be evaluated with caution, as it
+              may include inaccuracies due to nearest-neighbor matches.
+        """
         if self.default_filtered:
             data = self.get_filtered_dataset()
         else:
             data = self.dataset
-        # @TODO Here, the same safeguard against next-neighbour selection as in get_current_at_voltage should prob be
-        # implemented
+
         difference_landscape = []
         try:
             for i in range(len(data)):
@@ -480,7 +756,12 @@ class FullCV(CV):
         else:
             data = self.dataset
 
-        self.eval_voltage = data[np.where(self.difference_landscape == max(self.difference_landscape)), 0][0][0]
+        eval_voltage = data[np.where(self.difference_landscape == max(self.difference_landscape)), 0][0][0]
+        if isinstance(eval_voltage, Quantity):
+            eval_voltage = eval_voltage.magnitude
+        self.eval_voltage = eval_voltage
+        # print(f"Eval voltage register called. Determined {eval_voltage}. IsInstance results in {isinstance(eval_voltage, Quantity)}."
+        #      f"Self-eval volt is now {self.eval_voltage}")
 
     def collapse_to_writable_list(self, filtered: bool = False, comment: str = None):
         # it is crucial to match the length of the meta-params between half-cycles and full cycles, so they can be
@@ -569,7 +850,7 @@ class FullCV(CV):
     # via minimization, since the fill factor equation is not invertible.
     # Then, the theoretical vertical ratio is calculated and returned, as well as the distortion parameter.
     def estimate_vertical_current_ratio(self):
-        @jit
+        # @jit
         def ff_difference(distortion_param):
             return np.abs(ff - (-2 * distortion_param + np.cosh(1 / (2 * distortion_param)) / np.sinh(
                 1 / (2 * distortion_param))))
@@ -582,6 +863,30 @@ class FullCV(CV):
         return vertical_ratio, param_distortion
 
     def distortion_param_evaluation(self):
+        """
+        Evaluates the cyclic voltammetry data via the analytical method, by determining the fill factor, calculating
+        therefrom the distortion parameter, using this distortion parameter to calculate the ratio of the apparent
+        current difference at the potential limits to the true ratio, and finally obtaining capacitance, resistance,
+        distortion parameter. It is incapable of determining offset, but will return a None element for compatibility.
+
+        The method performs the following steps:
+        1. Checks if a scan rate is defined. If not, raises `NoScanrateDefinedError`.
+        2. Selects the appropriate dataset (filtered or unfiltered).
+        3. Calculates the potential window and initial capacitance estimate from the current difference at the
+            limits of the potential window and scanrate.
+        4. Estimates the vertical current ratio and uses it to adjust the capacitance estimate.
+        5. Calculates the resistance estimate based on the distortion parameter and other calculated values.
+        6. Returns the absolute resistance estimate, capacitance estimate, potential window, and distortion parameter.
+
+        :return: A tuple containing the following:
+            - resistance_estimate (Quantity): The estimated resistance in Ohms.
+            - capacitance_estimate (Quantity): The estimated capacitance in Farads.
+            - potential_window (Quantity): The potential window in Volts.
+            - distortion_param (float): The distortion parameter value.
+            - None: A placeholder for compatibility with other methods.
+
+        :raises NoScanrateDefinedError: If the scan rate (`self.scanrate`) is not defined.
+        """
         if self.scanrate is None:
             raise NoScanrateDefinedError("No scanrate has been set for the CV.")
 
@@ -613,7 +918,9 @@ class FullCV(CV):
         resistance_estimate = distortion_param.x * potential_window / (scanrate * capacitance_estimate)
         resistance_estimate.units = pq.Ohm
         # print(f"Resistance estimate: {resistance_estimate.__abs__()}")
-        return resistance_estimate.__abs__(), capacitance_estimate, potential_window, distortion_param.x
+        # The final return param is the offset. This method inherently discards the offset in the fit, but it must be
+        # returned for compatibility of the interface with methods that do determine it.
+        return resistance_estimate.__abs__(), capacitance_estimate, potential_window, distortion_param.x, None
 
     # Purpose: Determine, if the CV is influenced by underlying currents that shift or distort the capacitive CV.
     # The p_d is determined from the current ratios at 1/4 and 3/4 of the potential window, and compared with the fill-
@@ -621,13 +928,13 @@ class FullCV(CV):
     def bias_analysis(self):
         # return the difference between a target current ratio (here: measured) and the current ratio at a given p_d
         # These are the optimisation functions
-        @jit
+        # @jit
         def current_ratio_first_quarter(distortion_param, target_current_ratio):
             return np.abs(target_current_ratio - (-1 + 2 /
                                                   (1 + np.sinh(3 / (8 * distortion_param)) /
                                                    np.cosh(1 / (8 * distortion_param)))))
 
-        @jit
+        # @jit
         def current_ratio_third_quarter(distortion_param, target_current_ratio):
             res = np.abs(target_current_ratio - (-1 - 2 /
                                                  (-1 + np.sinh(3 / (8 * distortion_param)) /
@@ -635,13 +942,13 @@ class FullCV(CV):
             # print(f"Optimise: {res}, at distortion {distortion_param}")
             return res
 
-        @jit
+        # @jit
         def get_current_ratio_by_distortion_param_first_quarter(distortion_param):
             return (-1 + 2 /
                     (1 + np.sinh(3 / (8 * distortion_param)) /
                      np.cosh(1 / (8 * distortion_param))))
 
-        @jit
+        # @jit
         def get_current_ratio_by_distortion_param_third_quarter(distortion_param):
             return (-1 - 2 /
                     (-1 + np.sinh(3 / (8 * distortion_param)) /
@@ -751,6 +1058,38 @@ class FullCV(CV):
         return ret
 
     def fit_cv_by_optimisation(self):
+        """
+        Optimizes the resistance (R), capacitance (C), and offset parameters for a cyclic voltammetry (CV) dataset
+        using an optimization algorithm.
+
+        This method enhances the initial distortion parameter evaluation by applying an optimization algorithm to
+        refine the estimates of the RC parameters. The process involves splitting the CV dataset into forward and reverse
+        scan segments, creating a homogenous forward and backward scan segment, and fitting both to a target function
+        that models the expected current response based on the RC parameters.
+
+        The steps involved in this method are:
+        1. Verify that the scan rate is defined. If not, raise `NoScanrateDefinedError`.
+        2. Convert all quantities to their base SI units (voltage in volts, current in amperes) for consistent calculations.
+        3. Split the CV dataset into forward and reverse scan segments based on voltage peaks.
+        4. Create a time domain for each segment based on the linear scan rate assumption.
+        5. Define the forward and reverse target functions that model the current response over time.
+        6. Apply the `scipy.optimize.minimize` function to optimize the RC parameters using the initial estimates provided by
+           the analytical distortion parameter evaluation.
+        7. Return the optimized resistance, capacitance, potential window, distortion parameter, and offset values.
+
+        :return: A tuple containing the following optimized parameters:
+            - optimal_R (Quantity): The optimized resistance value in Ohms.
+            - optimal_C (Quantity): The optimized capacitance value in Farads.
+            - potential_window (Quantity): The calculated potential window in Volts.
+            - distortion_param (float): The optimized distortion parameter.
+            - optimal_offset (Quantity): The optimized offset value in Amperes.
+
+        :raises NoScanrateDefinedError: If the scan rate (`self.scanrate`) is not defined.
+
+        The method utilizes the `Nelder-Mead` optimization algorithm and is sensitive to the initial guess provided
+        by the `distortion_param_evaluation` method. This guess is critical for convergence, as poor initial values may
+        lead to non-converging results or incorrect parameter estimates.
+        """
         # Split any CV into a forward and reverse scan part, to be able to apply segment-wise interpolation
         # Then, run optimisation to find RC-parameter.
         if self.scanrate is None:
@@ -863,22 +1202,23 @@ class FullCV(CV):
         A = (np.max([np.max(sub_dataset_forward_direction[:, 1]), np.max(sub_dataset_reverse_direction[:, 1])]) -
              np.min([np.min(sub_dataset_forward_direction[:, 1]), np.min(sub_dataset_reverse_direction[:, 1])]))/2
         T = sub_dataset_reverse_direction[-1, 0] - sub_dataset_forward_direction[0, 0]
-        @jit
-        def forward_current(t, R, C):
-            return (-8 * A * C / T) * np.exp(-t / (R * C)) / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T
+        # @jit
+        def forward_current(t, R, C, offset):
+            return ((-8 * A * C / T) * np.exp(-t / (R * C)) / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T) + offset
         forward_vectorized = np.vectorize(forward_current)
 
-        @jit
-        def reverse_current(t, R, C):
-            return (8 * A * C / T) * np.exp((-t + T) / (R * C)) / (1 + np.exp(T / (2 * R * C))) - 4 * A * C / T
+        def reverse_current(t, R, C, offset):
+            return ((8 * A * C / T) * np.exp((-t + T) / (R * C)) / (1 + np.exp(T / (2 * R * C))) - 4 * A * C / T) + offset
         reverse_vectorized = np.vectorize(reverse_current)
 
+        #@time_this_function
         def target_function_optimisation(params):
             R = params[0]
             C = params[1]
-            forward_difference = (forward_vectorized(sub_dataset_forward_direction[:, 0], R=R, C=C) -
+            offset = params[2]
+            forward_difference = (forward_vectorized(sub_dataset_forward_direction[:, 0], R=R, C=C, offset=offset) -
                                   sub_dataset_forward_direction[:, 2])
-            reverse_difference = (reverse_vectorized(sub_dataset_reverse_direction[:, 0], R=R, C=C) -
+            reverse_difference = (reverse_vectorized(sub_dataset_reverse_direction[:, 0], R=R, C=C, offset=offset) -
                                   sub_dataset_reverse_direction[:, 2])
             # print(f"R {R}, C {C}")
             # print(f"forward {np.sum(np.abs(forward_difference))}, reverse {np.sum(np.abs(reverse_difference))}")
@@ -889,20 +1229,20 @@ class FullCV(CV):
         # The initial guess is critical to convergence of the algorithm. If it is too far off, the target function
         # for one branch or the other may return nan or np.inf, disorienting the search.
         # Here, the analytical distortion param evaluation is called for providing the initial guess. Even though it is
-        # sensitive to fill factor-error introduced by noise, it will be in the ballpark.
+        # sensitive to fill factor-error introduced by noise, it will be in the ballpark. The inital offset guess is 0.
 
-        res_initial, cap_initial, window, p_d = self.distortion_param_evaluation()
-        initial_values = np.array([res_initial, cap_initial])
+        res_initial, cap_initial, window, p_d, dummy_var = self.distortion_param_evaluation()
+        initial_values = np.array([res_initial, cap_initial, 0])
         print(f"Initial pd values: res {res_initial}, cap {cap_initial}, window {window}, pd {p_d}")
         # Optimise with the initial values, bounds are set to exclude negative values.
-        opt = minimize(target_function_optimisation, initial_values , bounds=((0, None), (0, None)),
+        opt = minimize(target_function_optimisation, initial_values , bounds=((0, None), (0, None), (None, None)),
                        method='Nelder-Mead')
         # print(opt)
-        optimal_R, optimal_C = opt.x
+        optimal_R, optimal_C, optimal_offset = opt.x
 
         distortion_param = scanrate * optimal_C * optimal_R/(2*A)
-        print(f"Optimisation complete: R {optimal_R}, C {optimal_C}, W  {2*A}, p_d {distortion_param}")
-        return optimal_R * pq.Ohm , optimal_C * pq.F, 2*A * pq.V, distortion_param
+        print(f"Optimisation complete: R {optimal_R}, C {optimal_C}, W  {2*A}, p_d {distortion_param}, offset {optimal_offset}")
+        return optimal_R * pq.Ohm , optimal_C * pq.F, 2*A * pq.V, distortion_param, optimal_offset * pq.A
 
 class HalfCV(CV):
     index: int

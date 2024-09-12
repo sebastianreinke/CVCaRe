@@ -11,7 +11,7 @@ from CV import FullCV
 from custom_exceptions import NotEnoughCVsToFitError, VoltageBoundsOutsideCVError, FunctionNotImplementedError, \
     ScanrateExistsError, NoScanrateDefinedError, UnknownMethodError
 import Dataset
-from numba import jit
+# from numba import jit
 
 
 ########################################################################################################################
@@ -41,11 +41,11 @@ color_cycle = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', '
 ########################################################################################################################
 
 def calculate_RC_cv(Res, Cap, T_p, Amp):
-    @jit(nopython=True)
+    # @jit(nopython=True)
     def forward_current(t, A, T, R, C):
         return (-8 * A * C / T) * np.exp(-t / (R * C)) / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T
 
-    @jit(nopython=True)
+    # @jit(nopython=True)
     def backward_current(t, A, T, R, C):
         return (8 * A * C / T) * np.exp((-t + T) / (R * C)) / (1 + np.exp(T / (2 * R * C))) - 4 * A * C / T
 
@@ -302,7 +302,7 @@ def plot_figure(given_data, x_title, y_title, special_highlight: list = None, fi
 
 
 def cv_row(item_nr):
-    row = [sg.InputText(key=("cv", item_nr), default_text=""), sg.FileBrowse("Browse File...", font=("Arial", 10)),
+    row = [sg.InputText(key=("cv", item_nr), default_text=""), sg.FileBrowse("Browse File...", font=("Arial", 10), size=(12, 1)),
            sg.Checkbox(text="Use?", font=("Arial", 10), size=5, default=True, key=("use", item_nr)),
            sg.Checkbox(text="Filter?", font=("Arial", 10), size=5, default=False, key=("f", item_nr))]
     return row
@@ -527,8 +527,8 @@ file_column = [
      sg.DropDown(["F", "mF", "uF", "nF", "pF"], key=("-UNIT-", 2), readonly=True, default_value="mF", enable_events=True)],
     [sg.HorizontalSeparator()],
     [sg.InputText(key=("cv", 1),
-                  default_text=""),
-     sg.FileBrowse("Browse File...", font=("Arial", 10)),
+                  default_text="", enable_events=True),
+     sg.FilesBrowse("Browse File(s)...", font=("Arial", 10), size=(12, 1)),
      sg.Checkbox(text="Use?", font=("Arial", 10), size=5, default=True, key=("use", 1)),
      sg.Checkbox(text="Filter?", font=("Arial", 10), size=5, default=False, key=("f", 1))]
 ]
@@ -564,8 +564,8 @@ capacitance_column = [[sg.Text("Capacitance Calculation", font=("Calibri", 16, "
                                 enable_events=False), sg.Checkbox('Force fit through origin',
                                                                   key="origin_fit", default=False)],
                       [sg.Text("Calculation mode:"),
-                       sg.Combo(["At selected voltage", "MinMax Current", "MinMax Current, Corrected"],
-                                key="capacitance_calculation_method", default_value="MinMax Current, Corrected",
+                       sg.Combo(["At selected voltage", "MinMax Current", "CaRe analysis"],
+                                key="capacitance_calculation_method", default_value="CaRe analysis",
                                 enable_events=False), sg.Button('Calculate Capacitance')],
                       [sg.Text("Capacitance by linear fit [F]:"), sg.Push(), sg.InputText(key='cap_opt_out')],
                       [sg.Text("Zero-offset of linear fit [A]:"), sg.Push(), sg.InputText(key='offs_opt_out')],
@@ -623,9 +623,9 @@ menu_def = (
             ['Load partial CVs', 'Bias analysis', 'Cycle split all files']])
 
 layout = [
-    # [sg.Titlebar("Magical Mystery tool for capacitive CVs")],
     [sg.Menu(menu_def, text_color='black', disabled_text_color='gray', font='Arial', pad=(0, 20))],
-    [sg.Text("Plot capacitive CVs and calculate the capacitance", font=("Calibri", 20), justification='c')],
+    [sg.Image("Images/CVCaRe.png")],
+    #[sg.Text("CVCaRe - Cyclic voltammogram analysis tool", font=("Calibri", 20), justification='c')],
     [sg.HorizontalSeparator()],
     [sg.Column(file_column,
                vertical_alignment='top',
@@ -647,7 +647,7 @@ layout = [
 ]
 
 window = sg.Window('CV Analysis and Export', layout, finalize=True, font='Helvetica', grab_anywhere=True,
-                   resizable=True, icon="Z:\Research\CVCaRe\cvcare\cvcare.ico")
+                   resizable=True, icon="Images/cvcare.ico")
 # size=(1750, 925)
 
 # this metadata variable is the property of the main window and is used here to hold the number of rows of input
@@ -683,6 +683,19 @@ while True:
             window[('cv', i)].update("")
             window[('sr', i)].update("")
 
+    if event == ("cv", 1):
+        list_of_filenames = values[("cv", 1)].split(';')
+        insertion_index = 1
+        for filename in list_of_filenames:
+            if filename is not None:
+                # if more files are selected than rows are there, make new rows
+                if insertion_index > window.metadata:
+                    add_row_to_layout()
+                # update the input with the current filename
+                window[("cv", insertion_index)].update(filename)
+                insertion_index += 1
+
+
     if isinstance(event, tuple) and event[0] == "-UNIT-":
         loaded_data = Dataset.Dataset(values, window.metadata, window)
         setUnits[0] = eval("pq" + "." + values[("-UNIT-", 0)])
@@ -716,7 +729,7 @@ while True:
             method_name = "at_selected_voltage"
         elif values["capacitance_calculation_method"] == "MinMax Current":
             method_name = "minmax"
-        elif values["capacitance_calculation_method"] == "MinMax Current, Corrected":
+        elif values["capacitance_calculation_method"] == "CaRe analysis":
             method_name = "minmax_corrected"
         success = save_capacitances_to_file(filename=values["cap_save"], dataset=loaded_data, window_values=values,
                                             method=method_name)
@@ -740,7 +753,7 @@ while True:
             offset = None
             index_scanrate_current_dataset = None
             try:
-                # sg.Combo(["At selected voltage", "MinMax Current", "MinMax Current, Corrected"],
+                # sg.Combo(["At selected voltage", "MinMax Current", "CaRe analysis"],
                 #                                 key="capacitance_calculation_method",
                 # in case of at least 2 fittable CVs
 
@@ -751,7 +764,7 @@ while True:
                     capacitance, offset, index_scanrate_current_dataset = loaded_data.get_capacitance_by_minmax(
                         through_zero=values["origin_fit"], active_only=True, half_cycle_select=values["cycle_select"],
                         corrected=False)
-                elif values["capacitance_calculation_method"] == "MinMax Current, Corrected":
+                elif values["capacitance_calculation_method"] == "CaRe analysis":
                     capacitance, offset, index_scanrate_current_dataset = loaded_data.get_capacitance_by_minmax(
                         through_zero=values["origin_fit"], active_only=True, half_cycle_select=values["cycle_select"],
                         corrected=True)
@@ -778,7 +791,7 @@ while True:
                             data = cv.get_dataset()
                         current_difference = (max(data[:, 1]) - min(data[:, 1])) * cv.unit_current
 
-                    elif values["capacitance_calculation_method"] == "MinMax Current, Corrected":
+                    elif values["capacitance_calculation_method"] == "CaRe analysis":
                         if cv.get_default_filtered():
                             data = cv.get_filtered_dataset()
                         else:
@@ -923,9 +936,9 @@ while True:
             # distortion parameter and potential window. Choice of method.
 
             if values["care_calculation_mode"] == "Analytical":
-                resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+                resistance, capacitance, potential_window, distortion_param, offset = cv.distortion_param_evaluation()
             elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
-                resistance, capacitance, potential_window, distortion_param = cv.fit_cv_by_optimisation()
+                resistance, capacitance, potential_window, distortion_param, offset = cv.fit_cv_by_optimisation()
 
             # Obtain the voltage amplitude = half the potential window for the theoretical calculation.
             amplitude = cv.get_amplitude()
@@ -934,6 +947,7 @@ while True:
             T_p_calc.units = pq.s
 
             print(f"Resistance: {resistance}, Capacitance: {capacitance}, abs test: {cv.get_amplitude().magnitude}")
+            # test here
             fitted_cv = calculate_RC_cv(Res=resistance.magnitude,
                                         Cap=capacitance.magnitude,
                                         Amp=amplitude.magnitude,
@@ -950,7 +964,11 @@ while True:
             # The current slice is unit-converted, and shifted to coincide with the loaded dataset.
             current_slice = fitted_cv[:, 1] * pq.A
             current_slice = current_slice.rescale(setUnits[0])
-            current_corrector = (min(cv.dataset[:, 1]) * cv.unit_current - min(current_slice))
+            current_corrector = 0
+            if values["care_calculation_mode"] == "Analytical":
+                current_corrector = (min(cv.dataset[:, 1]) * cv.unit_current - min(current_slice))
+            elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
+                current_corrector = offset
             current_slice += current_corrector
 
             # the adjusted calculated CV dataset is reassembled by stacking along the vertical axis, and entered into
@@ -969,11 +987,11 @@ while True:
             window[("advanced", "distortion_param")].update(f"{np.array([np.round(distortion_param, 6)])[0]}")
         except NoScanrateDefinedError:
             sg.PopupError('No scanrate is defined for this CV.')
-        except FunctionNotImplementedError as e:
-            sg.PopupError(e)
-        except ValueError or AttributeError as e:
-            print(e)
-            sg.PopupError("The CV index may not exist, or the inputs are not of the correct data type.")
+        # except FunctionNotImplementedError as e:
+        #     sg.PopupError(e)
+        # except ValueError or AttributeError as e:
+        #     print(e)
+        #     sg.PopupError("The CV index may not exist, or the inputs are not of the correct data type.")
 
     if event == 'Bias analysis':
         try:
@@ -1059,9 +1077,9 @@ while True:
             # distortion parameter and potential window. Choice of method.
 
             if values["care_calculation_mode"] == "Analytical":
-                resistance, capacitance, potential_window, distortion_param = cv.distortion_param_evaluation()
+                resistance, capacitance, potential_window, distortion_param, offset = cv.distortion_param_evaluation()
             elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
-                resistance, capacitance, potential_window, distortion_param = cv.fit_cv_by_optimisation()
+                resistance, capacitance, potential_window, distortion_param, offset = cv.fit_cv_by_optimisation()
 
             # Obtain the voltage amplitude = half the potential window for the theoretical calculation.
             amplitude = cv.get_amplitude()
@@ -1085,8 +1103,13 @@ while True:
             # The current slice is unit-converted, and shifted to coincide with the loaded dataset.
             current_slice = fitted_cv[:, 1] * pq.A
             current_slice = current_slice.rescale(setUnits[0])
-            current_corrector = (min(cv.dataset[:, 1]) * cv.unit_current - min(current_slice))
+            current_corrector = 0
+            if values["care_calculation_mode"] == "Analytical":
+                current_corrector = (min(cv.dataset[:, 1]) * cv.unit_current - min(current_slice))
+            elif values["care_calculation_mode"] == "Optimisation enhanced analytical":
+                current_corrector = offset
             current_slice += current_corrector
+
             # the adjusted calculated CV dataset is reassembled by stacking along the vertical axis, and entered into
             # the dictionary for access via the plotting function.
             fitted_cv = np.stack((voltage_slice.magnitude, current_slice.magnitude), axis=1)
