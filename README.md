@@ -59,18 +59,28 @@ In this case, please send me an e-mail with an example data file that enables me
 
 ### GUI
 
-**Loading CV Files**: Select your files using the Browse File(s) button and click the "Load and preview CVs" button. Only after loading the CVs are they available for other calculations.
-**Save Files**: Save your data files in a uniform format by clicking the "Write CVs to file" button next to "Load and preview CVs". There, you may choose filenames, comments, and whether to save individual files or one composite file.
-**Capacitance Calculation**: Choose between:
+- **Loading CV Files**: Select your files using the Browse File(s) button and click the "Load and preview CVs" button. Only after loading the CVs are they available for other calculations.
+- **Save Files**: Save your data files in a uniform format by clicking the "Write CVs to file" button next to "Load and preview CVs". There, you may choose filenames, comments, and whether to save individual files or one composite file.
+- **Capacitance Calculation**: Choose between
     - At selected voltage
     - Min/Max Current
     - CaRe analysis (for distortion-corrected capacitance)
-**Save Results**: After calculating capacitance or performing analysis, save the data to a file via the "Save Capacitance" button.
-**Additional Analysis**: Perform various analyses such as calculating integrals, bias analysis, and cycle splitting.
+- **Save Results**: After calculating capacitance or performing analysis, save the data to a file via the "Save Capacitance" button.
+- **Additional Analysis**: Perform various analyses such as calculating integrals, bias analysis, and cycle splitting.
 
 ### Example
 
-Here is a basic workflow for capacitance calculation using the GUI:
+Here is a basic workflow to determine capacitance and resistance of CVs in the GUI:
+
+1. Load CV files using "Load and preview CVs."
+2. Enter a scan rate and the cycle number you wish to evaluate. If the cycle number is too high, it will default to the highest available.
+3. On the right-hand side, under advanced CV calculations, enter which CV you wish to analyse in "Use CV No.". As there can be multiple CVs loaded at any one time on the left, they are numbered from top to bottom starting at 1.
+4. Click "Perform distorted capacitive CV analysis". The results appear below to be copied for further use.
+5. If you wish to perform this calculation in bulk and save it automatically, repeat steps 1 and 2 for all CVs.
+6. On the left-hand side, find "Export to file:" and use the "Save As..." button to select a filename to save to.
+7. Click "Save bulk distortion analysis" to write the results to the selected file.
+
+Here is a basic workflow for a capacitance calculation using the GUI:
 
 1. Load CV files using "Load and preview CVs."
 2. Choose the capacitance calculation mode: 
@@ -79,7 +89,6 @@ Here is a basic workflow for capacitance calculation using the GUI:
     - "CaRe analysis"
 3. A current-difference vs. scan rate plot will be generated, and a linear fit performed. If you select "Force fit through origin", the linear fit will have zero offset.
 4. Review and save the calculated capacitance data by clicking "Save Capacitance."
-4. Visualize the CV and analysis results within the GUI.
 
 ## Dependencies
 Please find the required packages listed in the requirements.txt file. 
