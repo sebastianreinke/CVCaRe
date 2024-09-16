@@ -20,6 +20,8 @@ CVCaRe is an analysis tool for cyclic voltammograms (CVs). It can read CV data, 
 ## Installation
 
 There are two ways to use CVCaRe: There is an executable file, that will run without installation. It provides the same functionality, but is usually somewhat slower to start up.
+Due to file size limitations on GitHub, download it here: https://drive.proton.me/urls/6E5JR995SG#7HNMXmInDhLB
+
 You can also run the python files directly. For this, download this repository, for example by following these steps:
 
 
