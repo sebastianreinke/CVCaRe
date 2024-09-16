@@ -44,7 +44,7 @@ You can also run the python files directly. For this, download this repository, 
 
 4. Run the application:
     ```bash
-    python main.py
+    python gui.py
     ```
 
 ## Issues
@@ -80,15 +80,16 @@ Here is a basic workflow to determine capacitance and resistance of CVs in the G
 6. On the left-hand side, find "Export to file:" and use the "Save As..." button to select a filename to save to.
 7. Click "Save bulk distortion analysis" to write the results to the selected file.
 
-Here is a basic workflow for a capacitance calculation using the GUI:
+If you would like to automate a traditional current vs. scan rate calculation of capacitance:
 
-1. Load CV files using "Load and preview CVs."
+1. Load CV files using "Load and preview CVs." and enter their scan rates.
 2. Choose the capacitance calculation mode: 
     - "At selected voltage"
     - "MinMax Current"
     - "CaRe analysis"
-3. A current-difference vs. scan rate plot will be generated, and a linear fit performed. If you select "Force fit through origin", the linear fit will have zero offset.
-4. Review and save the calculated capacitance data by clicking "Save Capacitance."
+3. Click "Calculate Capacitance".
+4. A current-difference vs. scan rate plot will be generated, and a linear fit performed. If you select "Force fit through origin", the linear fit will have zero offset.
+5. Review and save the calculated capacitance data by clicking "Save Capacitance." after selecting the export file.
 
 ## Dependencies
 Please find the required packages listed in the requirements.txt file. 
