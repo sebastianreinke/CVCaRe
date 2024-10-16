@@ -2,25 +2,11 @@
 
 CVCaRe is an analysis tool for cyclic voltammograms (CVs). It can read CV data, parse cycles, calculate capacitance using both conventional methods, and implement a new *CaRe* technique to determine capacitance and resistance from a CV. Additionally, CVCaRe provides a GUI built with PySimpleGUI for easy interaction.
 
-## Features
+## How to use it
 
-- **Data Parsing**: Reads cyclic voltammograms and parses them into cycles. If provided, cycle data will be used. Otherwise, cycles are inferred from the potential waveform.
-- **Capacitance Calculation**:
-  - **Conventional Methods**: Calculates capacitance using the current difference at selected potentials.
-  - **MinMax**: Calculates the capacitance based on the current difference between the maximum and minimum current.
-  - **CaRe Analysis**: A new technique that calculates both capacitance and resistance, factoring in distortion.
-- **CV Analysis Tools**:
-  - True scanrate plots
-  - Cycle splitting
-  - Integral calculations within specific voltage bounds
-  - Distorted capacitive CV analysis
-- **Data Export**: You may export your data files themselves in a universal format, or export a cycle-split version of your dataset to process further, as well as the results from the capacitance calculation.
-- **User-friendly GUI**: Built with PySimpleGUI, making the analysis process interactive and accessible.
+If you would like a simple executable file, download from the repository the file cvcare_v_7_2.exe. You may alternatively find the same file here: https://drive.proton.me/urls/6E5JR995SG#7HNMXmInDhLB
+The executable removes the need for an active python installation, but is usually somewhat slower to start up.
 
-## Installation
-
-There are two ways to use CVCaRe: There is an executable file, that will run without installation. It provides the same functionality, but is usually somewhat slower to start up.
-Due to file size limitations on GitHub, download it here: https://drive.proton.me/urls/6E5JR995SG#7HNMXmInDhLB
 
 You can also run the python files directly. For this, download this repository, for example by following these steps:
 
@@ -46,6 +32,21 @@ You can also run the python files directly. For this, download this repository, 
     ```bash
     python gui.py
     ```
+
+## Features
+
+- **Data Parsing**: Reads cyclic voltammograms and parses them into cycles. If provided, cycle data will be used. Otherwise, cycles are inferred from the potential waveform.
+- **Capacitance Calculation**:
+  - **Conventional Methods**: Calculates capacitance using the current difference at selected potentials.
+  - **MinMax**: Calculates the capacitance based on the current difference between the maximum and minimum current.
+  - **CaRe Analysis**: A new technique that calculates both capacitance and resistance, factoring in distortion.
+- **CV Analysis Tools**:
+  - True scanrate plots
+  - Cycle splitting
+  - Integral calculations within specific voltage bounds
+  - Distorted capacitive CV analysis
+- **Data Export**: You may export your data files themselves in a universal format, or export a cycle-split version of your dataset to process further, as well as the results from the capacitance calculation.
+- **User-friendly GUI**: Built with PySimpleGUI, making the analysis process interactive and accessible.
 
 ## Issues
 If you find bugs or errors in the program, please notify me at mailto:cvcare_github@sreinke.slmail.me
