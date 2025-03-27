@@ -1,0 +1,27 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: CVCaRe
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Sebastian
+    family-names: Reinke
+    email: github@sreinke.slmail.me
+    affiliation: Ruhr University Bochum
+    orcid: 'https://orcid.org/0009-0005-1029-7877'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.13941014
+    description: CVCaRe v7.2
+repository-code: 'https://github.com/sebastianreinke/CVCaRe'
+keywords:
+  - capacitance
+  - resistance
+  - cyclic voltammetry
+  - distortion
+  - supercapacitor
+license: GPL-3.0
