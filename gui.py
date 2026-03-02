@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with CVC
 
 from functools import partial
 
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
@@ -24,6 +24,19 @@ from custom_exceptions import NotEnoughCVsToFitError, VoltageBoundsOutsideCVErro
     ScanrateExistsError, NoScanrateDefinedError, UnknownMethodError
 import Dataset
 # from numba import jit
+
+# --- make the process DPI-aware on Windows ---
+import sys
+if sys.platform == "win32":
+    try:
+        from ctypes import windll
+        # 2 = Per-monitor DPI aware (best); fall back to 1 if it fails
+        windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
 
 
 ########################################################################################################################
@@ -635,7 +648,7 @@ menu_def = (
             ['Load partial CVs', 'Bias analysis', 'Cycle split all files']])
 
 layout = [
-    [sg.Menu(menu_def, text_color='black', disabled_text_color='gray', font='Arial', pad=(0, 20))],
+    [sg.Menu(menu_def, text_color='black', disabled_text_color='gray', font=("Segoe UI", 11))],
     [sg.Image("Images/CVCaRe.png")],
     #[sg.Text("CVCaRe - Cyclic voltammogram analysis tool", font=("Calibri", 20), justification='c')],
     [sg.HorizontalSeparator()],
@@ -661,6 +674,8 @@ layout = [
 window = sg.Window('CV Analysis and Export', layout, finalize=True, font='Helvetica', grab_anywhere=True,
                    resizable=True, icon="Images/cvcare.ico")
 # size=(1750, 925)
+# rescaling to make the navigation bar readable
+window.TKroot.tk.call('tk', 'scaling', 1.75)
 
 # this metadata variable is the property of the main window and is used here to hold the number of rows of input
 window.metadata = 1
@@ -999,6 +1014,8 @@ while True:
             window[("advanced", "distortion_param")].update(f"{np.array([np.round(distortion_param, 6)])[0]}")
         except NoScanrateDefinedError:
             sg.PopupError('No scanrate is defined for this CV.')
+        except ValueError:
+            sg.PopupError('Unsuccessful. Please check the values and indices you provided.')
         # except FunctionNotImplementedError as e:
         #     sg.PopupError(e)
         # except ValueError or AttributeError as e:

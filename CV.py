@@ -1,4 +1,4 @@
-"""
+f"""
 This file is part of CVCaRe. It is a cyclic voltammogram analysis tool that enables you to calculate capacitance and resistance from capacitive cyclic voltammograms.
     Copyright (C) 2022-2024 Sebastian Reinke
 
@@ -37,16 +37,40 @@ def get_positive_and_negative_voltage_peaks(full_dataset):
     # Truncation indices - choose as necessary. The beginning and end of CV is often noisy, or filled with artefacts,
     # and how far to cut around them is a tradeoff. Empirically, 40 - 10 works well for highly sampled CVs.
     # Note: truncate must always be >= than the lookahead, otherwise it triggers an IndexOutOfBoundsException.
-    truncate = (40, 10)
+    #truncate = (40, 10)
 
     # How far to check around a peak to detect it
-    lookahead = 10
-    if is_low_resolution:
-        truncate = (5, 5)
-        lookahead = 3
+    #lookahead = 10
+    #if is_low_resolution:
+    #    truncate = (5, 5)
+    #    lookahead = 3
 
-    if full_dataset[truncate[0]][0] < full_dataset[0][0]:
-        direction_upwards = False
+ #   if full_dataset[truncate[0]][0] < full_dataset[0][0]:
+ #       direction_upwards = False
+    
+    direction_upwards = None
+    e_treshold = full_dataset[0][0]
+
+    # some CVs have a period of initially constant voltage. This can produce erroneous cycle assessments if not
+    # excluded.
+    meaningful_start_of_cv = 0
+    if full_dataset[3][0] != e_treshold:
+        direction_upwards = (full_dataset[3][0] > e_treshold)
+        truncate = (3, 3)
+        lookahead = 3
+    if direction_upwards is None and full_dataset[10][0] != e_treshold:
+        direction_upwards = (full_dataset[10][0] > e_treshold)
+        truncate = (10, 5)
+        lookahead = 5
+    if direction_upwards is None and full_dataset[50][0] != e_treshold:
+        direction_upwards = (full_dataset[50][0] > e_treshold)
+        truncate = (40, 10)
+        lookahead = 10
+    if direction_upwards is None:
+        direction_upwards = (full_dataset[150][0] >= e_treshold)
+        truncate = (150, 30)
+        lookahead = 10
+        
     positive_peaks = []
     negative_peaks = []
     # iterate over all candidate center-elements in a len-3 comparison filter => exclude first and last element
@@ -87,6 +111,7 @@ def get_positive_and_negative_voltage_peaks(full_dataset):
         else:
             positive_peaks.append(len(full_dataset) - 1)
 
+        print(f"Corrected peak lists / positive {positive_peaks}, negative {negative_peaks}, direction upwards {direction_upwards}")
     return direction_upwards, negative_peaks, positive_peaks
 
 

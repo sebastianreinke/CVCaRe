@@ -15,13 +15,13 @@ import CV
 from CV import FullCV, HalfCV
 import quantities as pq
 from scipy import optimize as opt
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 from custom_exceptions import ScanrateExistsError, NotEnoughCVsToFitError, CycleIndexOutOfBoundsError, \
     NoCycleInformationError, NoScanrateDefinedError, UnknownMethodError
 
 # These are the signifying keywords for current and voltage in the CV datasets.
 current_signifiers = ["<I>", "Current", "current", "I/", "I /", "I(A)"]
-voltage_signifiers = ["Ewe", "Potential", "E/", "Voltage 1", "E /", "Voltage", "E(V)"]
+voltage_signifiers = ["Ewe", "Potential", "E/", "Voltage 1", "E /", "Voltage", "E(V)", "Working Electrode (V)"]
 
 
 def write_standardized_data_file(filename, data_to_write):
@@ -539,7 +539,6 @@ def cycle_detection_parsing(filename, cycle_number, assume_standard_csv_format, 
         if direction_upwards is None and dataset[100][0] != e_treshold:
             direction_upwards = (dataset[100][0] > e_treshold)
             meaningful_start_of_cv = 100
-        # TODO Was I on crack? Why 250?
         if direction_upwards is None:
             direction_upwards = (dataset[100][0] >= e_treshold)
             meaningful_start_of_cv = 250
