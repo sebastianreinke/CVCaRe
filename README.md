@@ -110,9 +110,13 @@ Contributions are welcome! Feel free to fork the project and submit a pull reque
 ## License
 
 This project is licensed under GPL-3.0-or-later.
-Copyright (C) 2022-2024  Sebastian Reinke
+Copyright (C) 2022-2026  Sebastian Reinke
 
-## Shape-dependent Electrochemistry
+## Acknowledgement
+ 
+This software was developed in the framework of a fellowship from the Deutsche Bundesstiftung Umwelt (DBU) during PhD research at Ruhr-Universität Bochum (RUB) and continues to be developed at Universität Paderborn (UPB). The author gratefully acknowledges the institutional support provided at both RUB and UPB. The work has been supported by publicly funded research projects.
 
-Find our work also at https://shape-ec.ruhr-uni-bochum.de/ 
+## Electrochemical Technology
+
+Find our work also at https://chemie.uni-paderborn.de/arbeitskreise/technische-chemie/linnemann
 
