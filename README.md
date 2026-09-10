@@ -246,7 +246,7 @@ Copyright (C) 2022-2026 Sebastian Reinke
 
 ## Acknowledgement
  
-This software was developed in the framework of a fellowship from the Deutsche Bundesstiftung Umwelt (DBU) during PhD research at Ruhr-Universität Bochum (RUB) and continues to be developed at Universität Paderborn (UPB). The author gratefully acknowledges the institutional support provided at both RUB and UPB. The work has been supported by publicly funded research projects.
+This software was developed in the framework of a fellowship from the Deutsche Bundesstiftung Umwelt (DBU) during PhD research at Ruhr University Bochum (RUB) and continues to be developed at Paderborn University (UPB). The author gratefully acknowledges the institutional support provided at both RUB and UPB. The work has been supported by publicly funded research projects.
 
 ## Electrochemical Technology
 
