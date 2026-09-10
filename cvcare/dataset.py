@@ -1,31 +1,11 @@
 """
-cvcare.dataset
-==============
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-GUI-unabhängige Dataset-Klasse für CVCaRe.
-
-Im Original (``Dataset-3.py``) war ``Dataset.__init__`` direkt an die
-FreeSimpleGUI-Window-Instanz gekoppelt: der Konstruktor las aus einem
-``values``-Dictionary (das so nur aus der GUI fällt), schrieb bei
-auto-korrigierten Zyklusnummern ``window[("cycle_nr", i)].update(...)`` und
-reichte das Window-Handle an :func:`half_cycle_parsing` weiter.
-
-Diese Datei entkoppelt das. Die Lade-Schnittstelle besteht aus drei
-Datenklassen:
-
-* :class:`CVLoadSpec`  – eine zu ladende CV-Datei + Parameter.
-* :class:`HalfCycleMode` – die drei zulässigen Modi (``full``, ``anodic``,
-  ``cathodic``).
-* :class:`CVLoadResult` – das Lade-Ergebnis pro Spec: erfolgreich (mit CV)
-  oder fehlgeschlagen (mit Fehlerinformation).
-
-Die GUI baut die Liste der :class:`CVLoadSpec`, ruft :class:`Dataset` auf
-und liest am Ende ``dataset.load_results`` aus, um ihre Widgets — z. B. das
-``cycle_nr``-Eingabefeld — zu aktualisieren. So bleibt die Domain-Logik
-vollständig ohne GUI-Aufrufe und damit testbar.
-
-Die Berechnungs- und Schreibmethoden (Kapazität, Verzerrungsparameter,
-Export) sind 1:1 aus ``Dataset-3.py`` übernommen.
+GUI-independent dataset model for CVCaRe. It loads CV files according to
+plain specifications, retains a detailed outcome for each load, and provides
+aggregate capacitance, distortion-parameter, and export operations.
 """
 
 from __future__ import annotations
@@ -64,23 +44,16 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Datenklassen / Enums
+# Data classes and enumerations
 # --------------------------------------------------------------------------- #
 
 
 class HalfCycleMode(str, Enum):
-    """
-    Lade-Modus für einen Datensatz.
-
-    Wert-Strings sind so gewählt, dass sie zu den Strings passen, die der
-    Original-Reader (:func:`cvcare.fileio.readers.half_cycle_parsing`) im
-    Parameter ``mode`` erwartet (``"forward"``/``"backward"``) bzw. die GUI
-    im Original verwendet hat (``"full cycles"``).
-    """
+    """Loading mode: complete cycles, ascending/anodic scans, or descending/cathodic scans."""
 
     FULL = "full cycles"
-    ANODIC = "forward"      # entspricht dem Reader-Parameter mode="forward"
-    CATHODIC = "backward"   # entspricht dem Reader-Parameter mode="backward"
+    ANODIC = "forward"      # Reader mode for ascending/anodic scans
+    CATHODIC = "backward"   # Reader mode for descending/cathodic scans
 
     @property
     def is_halfcycle(self) -> bool:
@@ -89,31 +62,7 @@ class HalfCycleMode(str, Enum):
 
 @dataclass
 class CVLoadSpec:
-    """
-    Eine zu ladende CV-Datei mit allen Parametern, die für das Lesen und
-    Konstruieren eines :class:`~cvcare.core.cv.CV`-Objekts notwendig sind.
-
-    Felder
-    ------
-    index:
-        Logischer 1-basierter Index in der GUI-Sidebar bzw. im Dataset. Wird
-        auch dem ``CV``-Objekt mitgegeben und ist die ID, über die die GUI
-        später Widgets wiederfindet.
-    filepath:
-        Pfad zur CV-Quelldatei.
-    cycle_number:
-        Gewünschte Zyklusnummer (1-basiert nach Konvention der Reader).
-        ``None`` → Default 2 wie im Original.
-    eval_voltage:
-        Optionale Auswertungsspannung in V (für ``get_current_at_voltage``).
-        ``None`` ist erlaubt.
-    use:
-        Aktiv-Flag für den späteren Fit. Mapping auf
-        :meth:`cvcare.core.cv.CV.set_active`.
-    filtered:
-        Default-Filter-Flag (Savitzky-Golay) für Plot und Auswertung.
-        Mapping auf :meth:`cvcare.core.cv.CV.set_default_filtered`.
-    """
+    """Settings required to load one CV file: its sidebar index, path, optional cycle and evaluation voltage, and active/filter flags."""
 
     index: int
     filepath: str
@@ -125,29 +74,7 @@ class CVLoadSpec:
 
 @dataclass
 class CVLoadResult:
-    """
-    Lade-Ergebnis für eine :class:`CVLoadSpec`.
-
-    Felder
-    ------
-    spec_index:
-        Der ``index`` der zugehörigen :class:`CVLoadSpec` (1-basiert).
-    cv:
-        Das erzeugte :class:`~cvcare.core.cv.CV`-Objekt oder ``None``, wenn
-        der Ladevorgang fehlschlug.
-    corrected_cycle_number:
-        Falls die Reader-Funktion eine Zyklus-Out-of-Bounds-Situation
-        festgestellt und auf den höchsten verfügbaren Zyklus zurückgefallen
-        ist, steht hier die *tatsächlich verwendete* Zyklusnummer; die GUI
-        kann ihr Eingabefeld entsprechend aktualisieren. ``None``, wenn der
-        ursprünglich angeforderte Zyklus verwendet wurde.
-    error:
-        Falls ``cv is None``: die zugehörige Exception (oder None falls
-        leere Spec — z. B. leerer Dateiname).
-    info:
-        Menschenlesbare Hinweise, die in der GUI-Statusleiste angezeigt
-        werden können (z. B. „Auto-Cycle-Detection wurde verwendet“).
-    """
+    """Result of loading one specification: a CV object on success, or an error and optional cycle correction on failure."""
 
     spec_index: int
     cv: Optional[CV] = None
@@ -161,15 +88,14 @@ class CVLoadResult:
 
 
 # --------------------------------------------------------------------------- #
-# Dataset
+# Dataset container
 # --------------------------------------------------------------------------- #
 
 
 # Typ für den Half-Cycle-Fallback-Callback. Der Reader fragt nach der
 # Zyklusnummer für den Halbzyklus-Fall, falls keine Cycle-Information da ist;
 # die GUI kann hier z. B. simpledialog.askinteger() einspielen. Der Default
-# ist eine deterministische Funktion, die einfach 1 zurückgibt — das war im
-# Original der "OK ohne Eingabe"-Fallback in half_cycle_parsing.
+# ist eine deterministische Funktion, die einfach 1 zurückgibt
 OnCycleFallback = Callable[[int], int]
 """Signatur: (spec_index) -> Zyklusnummer."""
 
@@ -180,35 +106,10 @@ def _default_on_cycle_fallback(spec_index: int) -> int:  # noqa: D401
 
 
 class Dataset:
-    """
-    Sammelt mehrere geladene CVs und stellt Aggregations-/Export-Methoden
-    bereit.
+    """Collection of successfully loaded CVs and operations performed across them.
 
-    Im Gegensatz zum Original (das ein ``values: dict`` aus der GUI plus ein
-    ``window: sg.Window`` entgegennahm) bekommt der Konstruktor hier eine
-    Liste von :class:`CVLoadSpec`-Objekten. Nach der Konstruktion stehen
-    zwei Listen zur Verfügung:
-
-    * ``contents`` — die erfolgreich geladenen ``CV``-Objekte (wie zuvor).
-    * ``load_results`` — pro Spec ein :class:`CVLoadResult` mit
-      Erfolgs-/Fehlerinformation und ggf. korrigierter Zyklusnummer. Die
-      GUI iteriert darüber, um ihre Widgets zu aktualisieren — das ersetzt
-      die direkten ``window[...].update(...)``-Aufrufe des Originals.
-
-    Parameters
-    ----------
-    specs:
-        Liste der zu ladenden CVs.
-    halfcycle_mode:
-        :class:`HalfCycleMode` (Full / Anodic / Cathodic).
-    assume_standard_csv:
-        Reicht den Original-Parameter ``assume_standard_csv_format`` an die
-        Reader durch.
-    on_cycle_fallback:
-        Callback für den Fall, dass im Halbzyklus-Modus keine
-        Cycle-Information vorhanden ist. Signatur ``(spec_index) -> int``.
-        Default: gibt immer 1 zurück (verhält sich wie der Original-Pfad
-        ohne GUI-Input).
+    ``contents`` holds usable CV objects. ``load_results`` retains a result for
+    every requested specification, including errors and safe cycle fallbacks.
     """
 
     contents: list[CV]
@@ -241,26 +142,15 @@ class Dataset:
             if result.cv is not None:
                 self.contents.append(result.cv)
 
-    # ----- Ladelogik (entkoppelt aus dem Original-__init__) ----- #
+    # ----- File loading logic ----- #
 
     def _load_one_spec(self, spec: CVLoadSpec) -> CVLoadResult:
-        """
-        Lädt eine einzelne :class:`CVLoadSpec` und gibt ein
-        :class:`CVLoadResult` zurück.
-
-        Verhalten ist 1:1 aus ``Dataset-3.py`` übernommen — inklusive der
-        Fallback-Kette (Cycle-Out-Of-Bounds → höchster verfügbarer Zyklus;
-        keine Cycle-Information → Auto-Detect). Geändert wurde nur, *wie*
-        Out-of-Bounds-Korrekturen kommuniziert werden: nicht mehr direkt
-        an ein GUI-Window, sondern als ``corrected_cycle_number`` im
-        Ergebnis.
-        """
-        # leerer Spec-Eintrag → kein Ladevorgang, kein Fehler
+        """Load one specification, normalize optional inputs, and return a detailed load result."""
+        # An empty file path is ignored without reporting an error.
         if not spec.filepath:
             return CVLoadResult(spec_index=spec.index)
 
-        # ----- 1. Zyklusnummer aufbereiten ----- #
-        # Originalverhalten: leer → 2; nicht-int → 2; im Halbzyklus-Modus
+        # ----- 1. Normalize the requested cycle number ----- #
         # darf der Fallback-Callback eingreifen.
         cycle_number = spec.cycle_number
         corrected_cycle_number: Optional[int] = None
@@ -275,7 +165,7 @@ class Dataset:
                 cycle_number = 2
                 corrected_cycle_number = 2
 
-        # ----- 2. Eval-Voltage aufbereiten ----- #
+        # ----- 2. Normalize the optional evaluation voltage ----- #
         voltage: Optional[float] = None
         if spec.eval_voltage is not None:
             try:
@@ -288,7 +178,7 @@ class Dataset:
 
         infos: list[str] = []
 
-        # ----- 3. Tatsächliches Lesen ----- #
+        # ----- 3. Read the requested data ----- #
         if self._halfcycle_mode is HalfCycleMode.FULL:
             data, corrected_via_load, err = self._load_full_cycle(
                 spec=spec, cycle_number=cycle_number
@@ -343,7 +233,7 @@ class Dataset:
                 unit_current=pq.A,
             )
 
-        # ----- 4. Aktivität / Filter aus Spec übernehmen ----- #
+        # ----- 4. Apply active and filtering settings ----- #
         cv.set_active(spec.use)
         cv.set_default_filtered(spec.filtered)
 
@@ -355,19 +245,7 @@ class Dataset:
         )
 
     def _load_full_cycle(self, spec: CVLoadSpec, cycle_number: int):
-        """
-        Versucht ``load_one_cycle``; bei Out-of-Bounds nimmt den höchsten
-        verfügbaren Zyklus; bei fehlender Cycle-Information fällt auf
-        ``cycle_detection_parsing`` zurück. Verhalten 1:1 aus dem Original.
-
-        Returns
-        -------
-        (data, corrected_cycle_number, error)
-            ``data`` ist ein NumPy-Array oder ``None`` bei Fehler. Im
-            Fehlerfall enthält ``error`` die Exception, sonst ``None``.
-            ``corrected_cycle_number`` ist gesetzt, wenn die Reader-Routine
-            auf den höchsten verfügbaren Zyklus zurückgefallen ist.
-        """
+        """Load one complete cycle, falling back to cycle detection when no cycle column exists."""
         try:
             data = load_one_cycle(
                 filename=spec.filepath,
@@ -381,7 +259,7 @@ class Dataset:
             return np.array(e.cycle_data), highest, None
 
         except NoCycleInformationError:
-            # Auto-Detect-Fallback
+            # Fallback: detect cycle boundaries from the voltage trace.
             try:
                 data = cycle_detection_parsing(
                     filename=spec.filepath,
@@ -398,7 +276,7 @@ class Dataset:
         except Exception as e:  # noqa: BLE001
             return None, None, e
 
-    # ----- Klassenmethode für die GUI-Brücke ----- #
+    # ----- Convenience constructor for sidebar-style values ----- #
 
     @classmethod
     def from_gui_values(
@@ -407,26 +285,7 @@ class Dataset:
         count: int,
         on_cycle_fallback: OnCycleFallback = _default_on_cycle_fallback,
     ) -> "Dataset":
-        """
-        Komfort-Konstruktor, der das alte ``values``-Dict-Schema aus der
-        FreeSimpleGUI-Welt akzeptiert. So kann die *neue* GUI schrittweise
-        migriert werden und die Original-Aufruflogik bleibt 1:1 testbar.
-
-        Erwartetes Schema (wie im Original):
-
-        ``values[("cv", i)]``            – Dateipfad (string), leere
-                                            Strings werden übersprungen.
-        ``values[("cycle_nr", i)]``       – Zyklusnummer (string oder int).
-        ``values[("voltage_eval", i)]``   – Auswertespannung (string mit
-                                            ``,`` als Dezimaltrenner ok).
-        ``values["halfcycle_mode"]``      – ``"full cycles"`` /
-                                            ``"forward"`` / ``"backward"``.
-        ``values["default_csv_format"]``  – bool.
-
-        Out-of-Bounds-Korrekturen werden über ``load_results`` reportet —
-        die aufrufende GUI iteriert darüber und aktualisiert ihre
-        ``cycle_nr``-Eingabefelder.
-        """
+        """Create a dataset from the sidebar-style values dictionary without calling GUI methods."""
         specs: list[CVLoadSpec] = []
         for i in range(1, count + 1):
             filepath = values.get(("cv", i), "")
@@ -469,10 +328,9 @@ class Dataset:
         )
 
     # --------------------------------------------------------------------- #
-    # Die übrigen Methoden sind 1:1 aus Dataset-3.py übernommen.
     # --------------------------------------------------------------------- #
 
-    # scanrates: list of [index of CV, scanrate]
+    # Scan rates are supplied as [CV index, scan rate] pairs.
     def set_scanrates(self, scanrates: list[list]):
         scanrates = np.array(scanrates)
         for i in range(len(scanrates)):
