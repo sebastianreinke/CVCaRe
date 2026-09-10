@@ -1,116 +1,246 @@
-# Welcome to the GitHub page for CVCaRe!
+# CVCaRe
 
-CVCaRe is an analysis tool for cyclic voltammograms (CVs). It can read CV data, parse cycles, calculate capacitance using both conventional methods, and implement a new *CaRe* technique to determine capacitance and resistance from a CV. Additionally, CVCaRe provides a GUI built with PySimpleGUI for easy interaction.
+CVCaRe is a desktop application for analysing cyclic voltammograms (CVs), with a particular focus on capacitive CVs. It implements a new method (CaRe) to calculate accurate capacitance and resistance values from a capacitive CV that deviates from a rectangular shape due to the influence of resistance. It reads common potentiostat export formats, selects individual cycles or half-cycles, plots loaded data, estimates capacitance from multiple scan rates, and performs CaRe resistance/capacitance/distortion analysis on complete CVs or forward/reverse scans.
 
-## How to use it
+The graphical user interface is built with **PySide6** and **pyqtgraph**. CVCaRe is distributed under the GNU General Public License, version 3 or later.
 
-If you would like a simple executable file, download from the repository the file cvcare_v_7_2.exe. You may alternatively find the same file here: https://drive.proton.me/urls/A0JBNM4B94#pRIPVwUyEtiD
-The executable removes the need for an active python installation, but is usually somewhat slower to start up.
+## Installation and Running
+
+### Use the executable (single-file, click and run)
+If you do not wish to use the Python source code, an executable can be downloaded here:
+ https://drive.proton.me/urls/A0JBNM4B94#pRIPVwUyEtiD
+Select Version 8.0 or later for the new, modern interface. Version 7.2 is still available as an older version. 
+
+### Run from Python source
+
+Requirements:
+
+- Python 3.10 or later is recommended
+- A working Python environment with the dependencies in `requirements.txt`
+
+Clone or download the repository, then create and activate a virtual environment:
+
+```bash
+git clone https://github.com/sebastianreinke/CVCaRe.git
+cd CVCaRe
+
+python -m venv .venv
+```
+
+On Windows Command Prompt:
+
+```bat
+.venv\Scripts\activate
+```
+
+On PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+On macOS or Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install the dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Start CVCaRe from the project root:
+
+```bash
+python -m cvcare
+```
+
+The package entry point is `cvcare/__main__.py`, which starts `cvcare.gui.app.run()`.
 
 
-You can also run the python files directly. For this, download this repository, for example by following these steps:
+## What CVCaRe Does
 
+### Read CV data
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/sebastianreinke/CVCaRe.git
-    cd CVCaRe
-    ```
+CVCaRe accepts text-based potentiostat exports such as `.txt`, `.csv`, `.dat`, and `.tsv` files. The reader is designed to handle common variations between potentiostat programs:
 
-2. Set up a Python virtual environment (optional but recommended):
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate # On Windows, use `venv\Scripts\activate`
-    ```
+- Semicolon-, tab-, and whitespace-separated values
+- Decimal commas and decimal points
+- Voltage and current columns in V/mV/µV/nV and A/mA/µA/nA
+- Explicit cycle-number columns, where available
+- Cycle detection from the voltage trace when a file does not contain a cycle-number column
 
-3. Install the necessary dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+Voltage and current columns are identified from header text. If a new potentiostat format uses a different header, the corresponding signifier can be added to `cvcare/fileio/signifiers.py`.
 
-4. Run the application:
-    ```bash
-    python gui.py
-    ```
+### Load full cycles or half-cycles
 
-## Features
+The sidebar provides three loading modes:
 
-- **Data Parsing**: Reads cyclic voltammograms and parses them into cycles. If provided, cycle data will be used. Otherwise, cycles are inferred from the potential waveform.
-- **Capacitance Calculation**:
-  - **Conventional Methods**: Calculates capacitance using the current difference at selected potentials.
-  - **MinMax**: Calculates the capacitance based on the current difference between the maximum and minimum current.
-  - **CaRe Analysis**: A new technique that calculates both capacitance and resistance, factoring in distortion.
-- **CV Analysis Tools**:
-  - True scanrate plots
-  - Cycle splitting
-  - Integral calculations within specific voltage bounds
-  - Distorted capacitive CV analysis
-- **Data Export**: You may export your data files themselves in a universal format, or export a cycle-split version of your dataset to process further, as well as the results from the capacitance calculation.
-- **User-friendly GUI**: Built with PySimpleGUI, making the analysis process interactive and accessible.
+| Mode | Meaning |
+|---|---|
+| **Full cycles** | Load one complete CV cycle from each selected file |
+| **Anodic (forward)** | Load the ascending-potential half-cycle |
+| **Cathodic (backward)** | Load the descending-potential half-cycle |
 
-## Issues
-If you find bugs or errors in the program, please notify me at mailto:cvcare_github@sreinke.slmail.me
+For each file row, enter or select:
 
-### Typical issues:
-- The menu bar is not displayed correctly for some zoom settings of the monitor. If you do not use 100% zoom, set your monitor to 100% zoom before starting CVCaRe. This will fix the issue, even if you then return to your previous setting.
-- A data file is not loaded. If it is a standard CSV file (comma as separator, dot as decimal marker) check the "Assume default CSV format" checkbox and retry. If the issue persists, the file format cannot yet be parsed by CVCaRe.
-In this case, please send me an e-mail with an example data file that enables me to reproduce the issue.
+- The source file
+- The cycle number to use
+- An optional evaluation voltage, `U [V]`
+- The scan rate, `ν [mV/s]`
+- Whether the CV is **active** for plotting and aggregate fits
+- Whether the Savitzky–Golay filter should be used by default
 
-## Usage
+If a requested cycle is unavailable, CVCaRe falls back to the highest available cycle and updates the displayed cycle number. Files without an explicit cycle column are handled through voltage-based cycle detection.
 
-### GUI
+### Plot loaded CVs
 
-- **Loading CV Files**: Select your files using the Browse File(s) button and click the "Load and preview CVs" button. Only after loading the CVs are they available for other calculations.
-- **Save Files**: Save your data files in a uniform format by clicking the "Write CVs to file" button next to "Load and preview CVs". There, you may choose filenames, comments, and whether to save individual files or one composite file.
-- **Capacitance Calculation**: Choose between
-    - At selected voltage
-    - Min/Max Current
-    - CaRe analysis (for distortion-corrected capacitance)
-- **Save Results**: After calculating capacitance or performing analysis, save the data to a file via the "Save Capacitance" button.
-- **Additional Analysis**: Perform various analyses such as calculating integrals, bias analysis, and cycle splitting.
+The plot is always visible in the main window. It supports:
 
-### Example
+- Independent titles and units for both axes
+- Optional Savitzky–Golay filtering for the displayed curves
+- Stable colours for each loaded CV
+- A plot-level **Isolate** selector for quickly showing one CV without changing which CVs are active for calculations
+- CaRe model overlays as dashed curves
+- Synthetic half-cycle mirror branches as dash-dot curves
+- Shaded directional integration areas
 
-Here is a basic workflow to determine capacitance and resistance of CVs in the GUI:
+The **active** checkbox is live: unchecking a loaded CV immediately hides its curve and associated overlays. It also excludes that CV from subsequent aggregate calculations. Re-checking it restores the curve without reloading the source file.
 
-1. Load CV files using "Load and preview CVs."
-2. Enter a scan rate and the cycle number you wish to evaluate. If the cycle number is too high, it will default to the highest available.
-3. On the right-hand side, under advanced CV calculations, enter which CV you wish to analyse in "Use CV No.". As there can be multiple CVs loaded at any one time on the left, they are numbered from top to bottom starting at 1.
-4. Click "Perform distorted capacitive CV analysis". The results appear below to be copied for further use.
-5. If you wish to perform this calculation in bulk and save it automatically, repeat steps 1 and 2 for all CVs.
-6. On the left-hand side, find "Export to file:" and use the "Save As..." button to select a filename to save to.
-7. Click "Save bulk distortion analysis" to write the results to the selected file.
+## Typical Workflow
 
-If you would like to automate a traditional current vs. scan rate calculation of capacitance:
+### Load and inspect CVs
 
-1. Load CV files using "Load and preview CVs." and enter their scan rates.
-2. Choose the capacitance calculation mode: 
-    - "At selected voltage"
-    - "MinMax Current"
-    - "CaRe analysis"
-3. Click "Calculate Capacitance".
-4. A current-difference vs. scan rate plot will be generated, and a linear fit performed. If you select "Force fit through origin", the linear fit will have zero offset.
-5. Review and save the calculated capacitance data by clicking "Save Capacitance." after selecting the export file.
+1. Start CVCaRe.
+2. In the left sidebar, choose **Full cycles**, **Anodic (forward)**, or **Cathodic (backward)**.
+3. Select one or more CV files using the `...` button in a row. Selecting multiple files populates available rows and creates additional rows when needed.
+4. Enter the desired cycle number, scan rate, and—when relevant—evaluation voltage for each CV.
+5. Click **Load**.
+6. Inspect the curves in the plot. Use **Isolate** when you want to closely inspect one selected CV without altering the active set used for fitting.
+7. Toggle **active** to exclude a CV from the plot and from subsequent aggregate fits without re-reading source files.
+
+### Calculate capacitance from several CVs
+
+The **Capacitance** tab performs a linear fit of the selected current quantity against scan rate using active CVs.
+
+1. Load at least two CVs with valid scan rates.
+2. Choose the calculation method:
+   - `minmax_corrected (recommended)`
+   - `minmax`
+   - `at_selected_voltage`
+3. Choose the cycle segment: `full`, `anodic`, or `cathodic`.
+4. For `at_selected_voltage`, enter an evaluation voltage for each applicable CV in the sidebar.
+5. Choose whether to force the linear fit through zero.
+6. Click **Compute capacitance**.
+
+Before calculating, the tab reads the current sidebar scan rates, evaluation voltages, active flags, and filter flags into the already-loaded dataset. Reloading files is therefore not required after correcting an input value.
+
+A separate **Capacitance fit diagnostic** window opens after a successful calculation. It plots the measured current quantity against scan rate and shows the actual fitted line, allowing you to inspect its quality. Use **Save result** to export the capacitance calculation.
+
+### Perform CaRe analysis on a full CV
+
+The **CaRe** tab evaluates one selected full CV using either an analytical method or an optimisation-enhanced analytical method.
+
+1. Load a CV in **Full cycles** mode.
+2. Enter its scan rate in the sidebar.
+3. Select the CV number and method in the CaRe tab.
+4. Click **Compute for selected CV**.
+
+CVCaRe reports:
+
+- Resistance in Ω
+- Capacitance in mF
+- Distortion parameter
+
+The reconstructed CaRe model is shown as a dashed curve in the plot, matching the colour of the measured CV. You can export an individual fitted V/I curve or bulk CaRe results for active CVs.
+
+### Work with a half-cycle
+
+The **HalfCV** tab is for datasets loaded in anodic or cathodic half-cycle mode.
+
+- **Show mirrored branch** creates a synthetic opposite branch by rotating the recorded branch by 180° about the midpoint of its endpoints. The synthetic branch is displayed as a dash-dot curve in the same colour as the original half-cycle.
+- **Compute CaRe on virtual full CV** joins the recorded half-cycle and its mirrored branch into a virtual closed CV and applies the selected CaRe method.
+
+The result contains information only about the selected measured half-cycle, despite the appearance of a full CV.
+
+### Integrate one scan direction
+
+The **Integral** tab integrates current over a user-specified potential interval for a selected full CV.
+
+1. Enter the CV number.
+2. Type the lower and upper voltage bounds directly as plain text. Both `.` and `,` are accepted as decimal separators.
+3. Select the anodic/forward or cathodic/backward direction.
+4. Click **Compute integral**.
+
+Invalid values are reported when computation is requested without rewriting the text you entered. Inverting the integral bounds changes the sign of the calculated integral.
+
+The selected region between the curve and the zero-current line is shaded in the main plot using a translucent version of that CV's curve colour. **Clear shading** removes the displayed region.
+
+### Export data
+
+The **Export** tab can:
+
+- Write each loaded CV to a separate standardized text file
+- Write all loaded CVs side by side to one file
+- Split a raw source file into individual cycle columns without first loading it into the application
+
+The CaRe tab can additionally export the reconstructed fit of the selected full CV, while the Capacitance tab can export aggregate fit results.
+
+## Important Notes and Limitations
+
+- CVCaRe is intended for cyclic-voltammetry data and assumes that the selected data represent usable capacitive CVs for the chosen evaluation method.
+- The CaRe analysis requires a full CV and a defined scan rate. The HalfCV workflow creates a virtual full CV to enable analysis, but contains only information present in the selected part of the CV.
+- The default Savitzky–Golay filter can improve visual inspection and some analyses, but filtering changes the data used by operations that honour the row's filter setting. Compare filtered and unfiltered results where appropriate.
+- Cycle detection without a cycle-number column relies on turning points in the voltage trace. Verify the selected cycle and half-cycle visually, especially for incomplete recordings, unusual waveforms, or strongly noisy data. The cycle splitting and HalfCV scan detection logic is robust against many practical hurdles in CV datasets, but it can fail. If you find that your data is handled incorrectly, please help improve CVCaRe and email an example dataset and describe the problem you encountered. 
+- Use the visual overlay of the recalculated CV to judge whether the model is appropriate or whether it deviates considerably from the measured data. In the latter case, the obtained values for resistance and capacitance are not reliable.
+
+## Troubleshooting
+
+### A file does not load
+
+- Verify that the file has identifiable voltage and current header columns.
+- Leave **Force standard CSV format** unchecked for common potentiostat exports so delimiter detection can run automatically.
+- Enable **Force standard CSV format** for plain comma-separated files using decimal points.
+- If the file still cannot be read, send a representative data file with a description of the potentiostat software and export settings when reporting the issue.
+- You can attempt to quick-fix the problem by identifying your particular current and voltage column headers, and add them in cvcare/fileio/signifiers.py, before running the program from Python source code.
+
+### A calculation reports a missing scan rate
+
+Enter the scan rate in `ν [mV/s]` in the sidebar. The Capacitance, CaRe, and HalfCV tabs reread sidebar settings immediately before calculation, so clicking **Load** again should not be necessary after entering or correcting a scan rate.
+
+### A requested cycle changes after loading
+
+The requested cycle number was not found. CVCaRe selected the highest available cycle and updates the entry to show the cycle actually used.
+
+### The executable starts slowly
+
+A Nuitka one-file executable extracts its bundled runtime before running. Cached one-file builds are normally slower only on their first launch for each application version and user account. A standalone build starts more directly, but requires distributing the complete `.dist` folder.
 
 ## Dependencies
-Please find the required packages listed in the requirements.txt file. 
 
-## Contributing
+The runtime requirements are listed in `requirements.txt`:
 
-Contributions are welcome! Feel free to fork the project and submit a pull request or open an issue for suggestions or bug reports.
+```text
+PySide6>=6.6,<7
+pyqtgraph>=0.13,<1
+numpy>=1.24,<3
+scipy>=1.10,<2
+quantities>=0.16,<1
+```
 
-### Steps to contribute:
+## Reporting Issues and Contributing
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Make your changes.
-4. Push to the branch (`git push origin feature-branch`).
-5. Open a pull request.
+If you find bugs or errors in the program, please report them at [cvcare_github@sreinke.slmail.me](mailto:cvcare_github@sreinke.slmail.me). A minimal example CV data file, the loading mode, selected cycle, and scan rate make issues much easier to reproduce.
+
+Contributions are welcome. Please fork the repository, create a feature branch, make and test your changes, then open a pull request or issue describing the change.
 
 ## License
 
 This project is licensed under GPL-3.0-or-later.
-Copyright (C) 2022-2026  Sebastian Reinke
+Copyright (C) 2022-2026 Sebastian Reinke
 
 ## Acknowledgement
  
@@ -119,4 +249,3 @@ This software was developed in the framework of a fellowship from the Deutsche B
 ## Electrochemical Technology
 
 Find our work also at https://chemie.uni-paderborn.de/arbeitskreise/technische-chemie/linnemann
-
