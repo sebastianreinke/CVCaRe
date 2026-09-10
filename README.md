@@ -4,6 +4,8 @@ CVCaRe is a desktop application for analysing cyclic voltammograms (CVs), with a
 
 The graphical user interface is built with **PySide6** and **pyqtgraph**. CVCaRe is distributed under the GNU General Public License, version 3 or later.
 
+Please open the user guide (cvcare_user_guide.html) in your browser for more detailed information about the functions of the program.
+
 ## Installation and Running
 
 ### Use the executable (single-file, click and run)
