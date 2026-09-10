@@ -3,11 +3,8 @@ This file is part of CVCaRe.
 Copyright (C) 2022-2026 Sebastian Reinke
 Licensed under the GNU General Public License v3 or later.
 
-GUI-independent dataset model for CVCaRe. It loads CV files according to
-plain specifications, retains a detailed outcome for each load, and provides
-aggregate capacitance, distortion-parameter, and export operations.
+The GUI-independent dataset model for loading CVs, fitting capacitance, and exporting results.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -44,12 +41,10 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Data classes and enumerations
 # --------------------------------------------------------------------------- #
 
 
 class HalfCycleMode(str, Enum):
-    """Loading mode: complete cycles, ascending/anodic scans, or descending/cathodic scans."""
 
     FULL = "full cycles"
     ANODIC = "forward"      # Reader mode for ascending/anodic scans
@@ -62,7 +57,6 @@ class HalfCycleMode(str, Enum):
 
 @dataclass
 class CVLoadSpec:
-    """Settings required to load one CV file: its sidebar index, path, optional cycle and evaluation voltage, and active/filter flags."""
 
     index: int
     filepath: str
@@ -74,7 +68,6 @@ class CVLoadSpec:
 
 @dataclass
 class CVLoadResult:
-    """Result of loading one specification: a CV object on success, or an error and optional cycle correction on failure."""
 
     spec_index: int
     cv: Optional[CV] = None
@@ -88,29 +81,19 @@ class CVLoadResult:
 
 
 # --------------------------------------------------------------------------- #
-# Dataset container
+# Dataset
 # --------------------------------------------------------------------------- #
 
 
-# Typ für den Half-Cycle-Fallback-Callback. Der Reader fragt nach der
-# Zyklusnummer für den Halbzyklus-Fall, falls keine Cycle-Information da ist;
-# die GUI kann hier z. B. simpledialog.askinteger() einspielen. Der Default
-# ist eine deterministische Funktion, die einfach 1 zurückgibt
 OnCycleFallback = Callable[[int], int]
 """Signatur: (spec_index) -> Zyklusnummer."""
 
 
 def _default_on_cycle_fallback(spec_index: int) -> int:  # noqa: D401
-    """Default-Fallback: nimm Zyklus 1, wie im Original ohne GUI-Input."""
     return 1
 
 
 class Dataset:
-    """Collection of successfully loaded CVs and operations performed across them.
-
-    ``contents`` holds usable CV objects. ``load_results`` retains a result for
-    every requested specification, including errors and safe cycle fallbacks.
-    """
 
     contents: list[CV]
     load_results: list[CVLoadResult]
@@ -124,9 +107,6 @@ class Dataset:
     ):
         self.contents = []
         self.load_results = []
-        # Defensiv koercieren — Aufrufer könnten einen rohen String
-        # übergeben (z. B. wenn ein str-Enum durch QComboBox.currentData()
-        # geht und dort seinen Enum-Typ verliert).
         if not isinstance(halfcycle_mode, HalfCycleMode):
             try:
                 halfcycle_mode = HalfCycleMode(halfcycle_mode)
@@ -142,16 +122,12 @@ class Dataset:
             if result.cv is not None:
                 self.contents.append(result.cv)
 
-    # ----- File loading logic ----- #
 
     def _load_one_spec(self, spec: CVLoadSpec) -> CVLoadResult:
-        """Load one specification, normalize optional inputs, and return a detailed load result."""
-        # An empty file path is ignored without reporting an error.
         if not spec.filepath:
             return CVLoadResult(spec_index=spec.index)
 
-        # ----- 1. Normalize the requested cycle number ----- #
-        # darf der Fallback-Callback eingreifen.
+        # ----- 1. Zyklusnummer aufbereiten ----- #
         cycle_number = spec.cycle_number
         corrected_cycle_number: Optional[int] = None
 
@@ -165,7 +141,7 @@ class Dataset:
                 cycle_number = 2
                 corrected_cycle_number = 2
 
-        # ----- 2. Normalize the optional evaluation voltage ----- #
+        # ----- 2. Eval-Voltage aufbereiten ----- #
         voltage: Optional[float] = None
         if spec.eval_voltage is not None:
             try:
@@ -178,7 +154,6 @@ class Dataset:
 
         infos: list[str] = []
 
-        # ----- 3. Read the requested data ----- #
         if self._halfcycle_mode is HalfCycleMode.FULL:
             data, corrected_via_load, err = self._load_full_cycle(
                 spec=spec, cycle_number=cycle_number
@@ -209,7 +184,7 @@ class Dataset:
                     mode=self._halfcycle_mode.value,
                     on_cycle_fallback=lambda: self._on_cycle_fallback(spec.index),
                 )
-            except Exception as e:  # noqa: BLE001  – Original schluckt auch alles
+            except Exception as e:  # noqa: BLE001 - report per-file loading errors without aborting the batch
                 return CVLoadResult(
                     spec_index=spec.index,
                     error=e,
@@ -233,7 +208,6 @@ class Dataset:
                 unit_current=pq.A,
             )
 
-        # ----- 4. Apply active and filtering settings ----- #
         cv.set_active(spec.use)
         cv.set_default_filtered(spec.filtered)
 
@@ -245,7 +219,6 @@ class Dataset:
         )
 
     def _load_full_cycle(self, spec: CVLoadSpec, cycle_number: int):
-        """Load one complete cycle, falling back to cycle detection when no cycle column exists."""
         try:
             data = load_one_cycle(
                 filename=spec.filepath,
@@ -259,7 +232,7 @@ class Dataset:
             return np.array(e.cycle_data), highest, None
 
         except NoCycleInformationError:
-            # Fallback: detect cycle boundaries from the voltage trace.
+            # Auto-Detect-Fallback
             try:
                 data = cycle_detection_parsing(
                     filename=spec.filepath,
@@ -276,7 +249,6 @@ class Dataset:
         except Exception as e:  # noqa: BLE001
             return None, None, e
 
-    # ----- Convenience constructor for sidebar-style values ----- #
 
     @classmethod
     def from_gui_values(
@@ -285,7 +257,6 @@ class Dataset:
         count: int,
         on_cycle_fallback: OnCycleFallback = _default_on_cycle_fallback,
     ) -> "Dataset":
-        """Create a dataset from the sidebar-style values dictionary without calling GUI methods."""
         specs: list[CVLoadSpec] = []
         for i in range(1, count + 1):
             filepath = values.get(("cv", i), "")
@@ -300,7 +271,7 @@ class Dataset:
                 try:
                     cycle_number = int(cycle_number_raw)
                 except (TypeError, ValueError):
-                    cycle_number = None  # Spec-Auflösung setzt dann auf 2
+                    cycle_number = None  # Invalid input is normalized to the default cycle during loading.
 
             eval_voltage_raw = values.get(("voltage_eval", i), "")
             specs.append(
@@ -330,7 +301,7 @@ class Dataset:
     # --------------------------------------------------------------------- #
     # --------------------------------------------------------------------- #
 
-    # Scan rates are supplied as [CV index, scan rate] pairs.
+    # scanrates: list of [index of CV, scanrate]
     def set_scanrates(self, scanrates: list[list]):
         scanrates = np.array(scanrates)
         for i in range(len(scanrates)):

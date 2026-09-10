@@ -1,12 +1,10 @@
 """
-cvcare.gui.tabs.bias_tab
-========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Bias-Tab. Führt :meth:`cvcare.core.cv.FullCV.bias_analysis` für einen
-ausgewählten CV aus und zeigt die Strom-Verhältnisse im ersten und dritten
-Viertel des Spannungsfensters an.
+User interface for experimental CV bias analysis.
 """
-
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -27,7 +25,6 @@ from cvcare.dataset import Dataset
 
 
 class BiasTab(QWidget):
-    """Bias-Analyse für einen FullCV-Datensatz."""
 
     def __init__(
         self,
@@ -98,7 +95,6 @@ class BiasTab(QWidget):
             QMessageBox.critical(self, "Bias analysis error", str(e))
             return
 
-        # bias_analysis() im Original gibt ein Tupel; wir packen es defensiv aus.
         try:
             first_ratio, third_ratio, dp_first, dp_third = result
         except (TypeError, ValueError):

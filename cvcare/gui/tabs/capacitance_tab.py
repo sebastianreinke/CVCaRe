@@ -1,11 +1,10 @@
 """
-cvcare.gui.tabs.capacitance_tab
-===============================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Kapazitätsberechnung. Spiegelt die Capacitance-Spalte aus ``gui-4.py``
-(Methodenwahl, Halbzyklus-Wahl, "Through-zero"-Option, Export).
+User interface for multi-CV capacitance fitting and diagnostic plots.
 """
-
 from __future__ import annotations
 
 from typing import Callable, Optional, TYPE_CHECKING
@@ -98,7 +97,6 @@ class _CapacitanceFitDialog(QDialog):
 
 
 class CapacitanceTab(QWidget):
-    """Tab für die lineare Kapazitäts-Auswertung."""
 
     def __init__(
         self,

@@ -1,21 +1,10 @@
 """
-File reading routines for cyclic voltammetry data files.
-
-The parsing logic in this module is deliberately tolerant to the many quirks
-of common potentiostat exports (Biologic, Gamry, etc.): different separators
-(``;``, ``\\t``, space), comma vs. dot decimal marks, units encoded in the
-header line, and optional cycle columns.
-
-This module mirrors the behaviour of the original ``Dataset.py`` parsers
-verbatim. Only the import paths and a small amount of cosmetic clean-up have
-changed; the substantive logic is unchanged so that previously-readable files
-remain readable.
-
 This file is part of CVCaRe.
 Copyright (C) 2022-2026 Sebastian Reinke
 Licensed under the GNU General Public License v3 or later.
-"""
 
+Tolerant readers for raw cyclic-voltammetry data exports.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -23,7 +12,6 @@ from typing import Any
 import numpy as np
 import quantities as pq
 
-# FreeSimpleGUI is only used as a type hint for the optional ``window_handle``
 # argument of ``half_cycle_parsing``. To keep this module GUI-free, we accept
 # any object that supports ``__getitem__`` and ``.update()``.
 from cvcare.fileio.signifiers import current_signifiers, voltage_signifiers
@@ -411,31 +399,16 @@ def half_cycle_parsing(
     mode: str = "forward",
     on_cycle_fallback=None,
 ):
-    """Extract a single half-cycle (forward or reverse) from a CV file.
-
-    Parameters
-    ----------
-    filename, assume_standard_csv_format, cycle_number, mode
-        As before.
-    on_cycle_fallback : callable or None
-        Optional callback ``fn()`` invoked when the requested half-cycle does
-        not exist and the function falls back to the first half-cycle. This
-        replaces the previous direct GUI update so the I/O layer no longer
-        depends on the GUI.
-    """
     full_dataset = read_in_full_cv(filename, assume_standard_csv_format)
 
     direction_upwards, negative_peaks, positive_peaks = get_positive_and_negative_voltage_peaks(full_dataset)
 
     # ------------------------------------------------------------------
-    # FIX (vs. original Dataset-3.py half_cycle_parsing):
-    # The original used negative_peaks[cycle-1]:positive_peaks[cycle] for the
     # "forward" / direction_upwards=True branch (and the symmetric variants),
     # which spans ~1.5 half-cycles for cycle >= 2. The intended meaning of
     # "cycle N forward scan" is the N-th ascending segment, bounded by the
     # (N-1)-th valley→peak in a CV that starts ascending and by the N-th
     # valley→peak in a CV that starts descending. After the leading-zero
-    # insertion done in get_positive_and_negative_voltage_peaks (Dataset-3.py
     # convention), the correct slice in both cases is
     # ``negative_peaks[cycle-1]:positive_peaks[cycle-1]`` for forward, mirrored
     # for backward. The fallback paths return the first available half-cycle.

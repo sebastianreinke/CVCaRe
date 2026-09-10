@@ -1,26 +1,10 @@
 """
-cvcare.core.peaks
-=================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Erkennung positiver und negativer Spannungs-Peaks in einem CV-Datensatz.
-
-Hintergrund
------------
-Im Original-Projekt existierten zwei nicht identische Implementierungen von
-``get_positive_and_negative_voltage_peaks`` — eine in ``CV-2.py`` (Zeilen
-29–115) und eine in ``Dataset-3.py`` (Zeilen 668–793). Diese werden hier zu
-*einer* Implementierung konsolidiert.
-
-Übernommen wurde die robustere Variante aus ``CV-2.py``: sie bestimmt die
-Startrichtung über eine mehrstufige Heuristik (Indizes 3 → 10 → 50 → 150),
-um auch CVs zu verarbeiten, die mit einer Phase konstanter Spannung
-beginnen. Aus ``Dataset-3.py`` wurde der ausführliche Docstring und die
-Low-Resolution-Initialisierung übernommen.
-
-Die ``print``-Debug-Ausgaben des Originals sind durch ``logging.debug``
-ersetzt — fachlich verhält sich die Funktion unverändert.
+Voltage turning-point detection for splitting CV recordings into cycles and half-cycles.
 """
-
 from __future__ import annotations
 
 import logging
@@ -85,22 +69,14 @@ def get_positive_and_negative_voltage_peaks(
     * Truncation must always be ``>=`` look-ahead, otherwise the
       neighbour-comparison would index out of bounds.
     """
-    # Low-Resolution-Flag aus Dataset-3.py übernehmen — wird derzeit nur
-    # genutzt, falls keine der voltage-basierten Heuristiken greift; lassen
-    # wir explizit drin, damit später z. B. Plot-Routinen darauf zugreifen
-    # könnten, wenn nötig.
     is_low_resolution = len(full_dataset) < 200
 
-    # Initialisierung mit sicheren Defaults — werden gleich überschrieben,
-    # falls eine der Stufen greift. Diese Defaults sind die "150er"-Stufe
-    # und entsprechen dem letzten Fallback in CV-2.py.
     direction_upwards: bool | None = None
     truncate: Tuple[int, int]
     lookahead: int
 
     e_threshold = full_dataset[0][0]
 
-    # Mehrstufige Richtungsbestimmung — übernommen aus CV-2.py.
     if full_dataset[3][0] != e_threshold:
         direction_upwards = full_dataset[3][0] > e_threshold
         truncate = (3, 3)
@@ -118,8 +94,6 @@ def get_positive_and_negative_voltage_peaks(
         truncate = (150, 30)
         lookahead = 10
 
-    # Bei niedrig aufgelösten Datensätzen die Fenstergrößen anpassen.
-    # (Aus Dataset-3.py — verhindert IndexOutOfBounds bei sehr kurzen CVs.)
     if is_low_resolution:
         truncate = (5, 5)
         lookahead = 3

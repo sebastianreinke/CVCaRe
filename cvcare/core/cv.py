@@ -1,42 +1,9 @@
 """
-cvcare.core.cv
-==============
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Domain-Logik für zyklische Voltammogramme.
-
-Dieses Modul enthält die abstrakte Basisklasse :class:`CV` sowie die
-konkreten Klassen :class:`FullCV` (vollständige Zyklen) und
-:class:`HalfCV` (Halbzyklen). Es entstand durch Migration von ``CV-2.py``
-in die neue Paketstruktur ``cvcare``. Die fachliche Logik bleibt
-unverändert; geändert wurden ausschließlich:
-
-* Imports: ``custom_exceptions`` → :mod:`cvcare.exceptions`,
-  ``get_positive_and_negative_voltage_peaks`` → :mod:`cvcare.core.peaks`.
-* Entfernt: Import von ``helper_functions.time_this_function`` (Modul
-  existierte im Repository nicht, Decorator wurde nirgends aktiv genutzt).
-* Entfernt: lokale Kopie von ``get_positive_and_negative_voltage_peaks``,
-  die hier zusätzlich zu der in ``Dataset.py`` existierte; konsolidiert
-  in :mod:`cvcare.core.peaks`.
-
-----
-
-This file is part of CVCaRe. It is a cyclic voltammogram analysis tool
-that enables you to calculate capacitance and resistance from capacitive
-cyclic voltammograms.
-    Copyright (C) 2022-2024 Sebastian Reinke
-
-CVCaRe is free software: you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free
-Software Foundation, either version 3 of the License, or (at your option)
-any later version.
-
-CVCaRe is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-details.
-
-You should have received a copy of the GNU General Public License along
-with CVCaRe. If not, see <https://www.gnu.org/licenses/>.
+CV data models and scientific calculations for full and half cyclic voltammograms.
 """
 from functools import partial
 
@@ -61,16 +28,8 @@ from cvcare.core.peaks import get_positive_and_negative_voltage_peaks
 # from numba import jit
 
 
-# Hinweis (Refactoring):
-# Die ursprünglich an dieser Stelle definierte Funktion
 # ``get_positive_and_negative_voltage_peaks`` ist nach
-# ``cvcare.core.peaks`` ausgelagert und wird oben importiert.
-# Im Original lag eine zweite, leicht abweichende Variante in Dataset.py;
-# beide wurden zu *einer* konsolidierten Implementierung zusammengefasst.
 #
-# Hinweis (Refactoring):
-# Der Import ``from helper_functions import time_this_function`` wurde
-# entfernt — das Modul existiert im Repository nicht, und der Decorator
 # wurde im gesamten CV.py nur in auskommentierten Zeilen referenziert.
 
 
@@ -641,15 +600,12 @@ class FullCV(CV):
                   f"for CV {self.index}."
                   f"This may indicate data with incomplete cycles or other error. Current-difference based calculations"
                   f"may be compromised.")
-            # Proceed with old calculation that may also select nearest-neighbour indices. Current difference landscape
             # data of this type should be evaluated with the utmost caution, if at all.
             for i in range(len(data)):
                 direct_value = data[i, 1]
                 next_closest = (np.abs(np.delete(data, i, 0)[:, 0] - data[i, 0])).argmin()
 
                 # a minor correction, since the next-closest is found in an array that is shortened by deleting the
-                # original index, thus all following indices are decreased by one compared to the correct index in the
-                # original dataset of the indentical element within.
                 if next_closest >= direct_value and next_closest + 1 < len(data):
                     next_closest += 1
                 current_difference = np.abs(data[i, 1] - data[next_closest, 1])
@@ -1408,33 +1364,11 @@ class HalfCV(CV):
 
 
 # --------------------------------------------------------------------------- #
-# Modellkurve fuer das CaRe-Overlay
 # --------------------------------------------------------------------------- #
 
 
 def calculate_rc_cv(resistance: float, capacitance: float, period: float,
                     amplitude: float, samples: int = 10000) -> np.ndarray:
-    """
-    Konstruiert das theoretische CV einer R-C-Kette in Basis-SI-Einheiten.
-
-    Parameter
-    ---------
-    resistance, capacitance:
-        R [Ohm] und C [F].
-    period:
-        Periodendauer T_p [s] eines vollen Zyklus.
-    amplitude:
-        Halbe Spannungs-Schwingweite A [V] (= halbes Potentialfenster).
-    samples:
-        Gesamtsamples (haelftig auf forward/reverse aufgeteilt).
-
-    Rueckgabe
-    ---------
-    ndarray ``(N, 2)`` mit Spalten ``[U_in_Volt, I_in_Ampere]``.
-
-    Die Funktion ist deckungsgleich mit ``calculate_RC_cv`` aus ``gui-4.py``,
-    nur in PEP-8-Form und als reine Hilfsfunktion ohne Seiteneffekte.
-    """
     def forward_current(t, A, T, R, C):
         return ((-8 * A * C / T) * np.exp(-t / (R * C))
                 / (1 + np.exp(-T / (2 * R * C))) + 4 * A * C / T)

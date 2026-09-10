@@ -1,12 +1,10 @@
 """
-cvcare.gui.tabs.halfcv_tab
-==========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-HalfCV tab (formerly "Mirror"). Constructs a synthetic mirror branch for a
-recorded half-cycle and can run CaRe's distortion-parameter analysis on the
-resulting virtual full CV.
+User interface for HalfCV mirroring and virtual-full-CV CaRe analysis.
 """
-
 from __future__ import annotations
 
 from typing import Callable, Optional, TYPE_CHECKING
@@ -36,7 +34,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class HalfCVTab(QWidget):
-    """Halbzyklus-Spiegelung plus optionale CaRe-Auswertung der virtuellen Vollzyklus-Schleife."""
 
     def __init__(
         self,

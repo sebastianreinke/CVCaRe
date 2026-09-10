@@ -1,5 +1,10 @@
-"""Tab-Komponenten der CVCaRe-GUI."""
+"""
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
+Analysis and export tabs displayed by the main application window.
+"""
 from cvcare.gui.tabs.plot_tab import PlotTab
 from cvcare.gui.tabs.capacitance_tab import CapacitanceTab
 from cvcare.gui.tabs.care_tab import CaReTab

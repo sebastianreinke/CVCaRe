@@ -1,23 +1,10 @@
 """
-cvcare.fileio.writers
-=================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Funktionen zum Schreiben von CV-Datensätzen in standardisierte Dateien.
-
-Diese Funktionen sind 1:1 aus ``Dataset-3.py`` übernommen, mit folgenden
-minimalen Korrekturen:
-
-* ``except FileNotFoundError or FileExistsError`` ist in Python ein Bug — der
-  ``or``-Operator wertet zur ersten wahrheitsgemäßen Exception aus und fängt
-  damit *nur* ``FileNotFoundError``. Korrigiert zu einem Tupel
-  ``(FileNotFoundError, FileExistsError, OSError, PermissionError)``.
-* Importe auf die neue Paketstruktur ``cvcare.*`` umgestellt.
-* Keine GUI-Aufrufe; Fehler werden über Rückgabewerte signalisiert
-  (``True``/``False``), damit die Funktionen testbar bleiben.
-
-Die Lese-/Parse-Logik selbst bleibt vollständig unverändert.
+Standardized output writers for CV datasets and analysis results.
 """
-
 from __future__ import annotations
 
 import os
@@ -36,26 +23,6 @@ __all__ = [
 
 
 def write_standardized_data_file(filename: str, data_to_write: Sequence[Iterable]) -> bool:
-    """
-    Schreibt einen 2D-Datensatz tab-separiert in ``filename`` (Anhang-Modus).
-
-    Parameters
-    ----------
-    filename:
-        Zieldatei. Wird im Anhang-Modus (``"a"``) geöffnet — bestehende Inhalte
-        bleiben erhalten. Verhalten ist identisch zur Original-Implementierung
-        in ``Dataset-3.py``.
-    data_to_write:
-        Sequenz von Zeilen; jede Zeile ist selbst eine iterierbare Sequenz von
-        Werten (Strings/Zahlen). Werte werden via ``str(...)`` konvertiert und
-        durch Tab getrennt geschrieben.
-
-    Returns
-    -------
-    bool
-        ``True`` bei Erfolg, ``False`` wenn die Datei nicht geöffnet werden
-        konnte (Datei-/Berechtigungsfehler).
-    """
     try:
         with open(filename, "a") as file:
             for row in data_to_write:
@@ -65,20 +32,11 @@ def write_standardized_data_file(filename: str, data_to_write: Sequence[Iterable
                 file.write(writestring + "\n")
         return True
     except (FileNotFoundError, FileExistsError, OSError, PermissionError):
-        # Im Original wurde hier per print kommuniziert; das behalten wir bei,
-        # damit aufrufender Code (GUI/CLI) sich nicht ändern muss.
         print("There was an error opening the file to write on.")
         return False
 
 
 def _generate_unique_filename(filename: str) -> str:
-    """
-    Erzeugt einen eindeutigen Dateinamen mit Suffix ``_CVEval_cycle_split``.
-
-    Falls die Zieldatei bereits existiert, wird ``(1)``, ``(2)``, ... angehängt,
-    bis ein noch nicht existierender Pfad gefunden ist. Verhalten identisch
-    zur lokalen Hilfsfunktion in ``write_split_cycles`` im Original.
-    """
     base_name, extension = os.path.splitext(filename)
     new_filename = base_name + "_CVEval_cycle_split" + extension
     if not os.path.exists(new_filename):
@@ -93,16 +51,6 @@ def _generate_unique_filename(filename: str) -> str:
 
 
 def _reshape_array(array: np.ndarray) -> np.ndarray:
-    """
-    Stellt einen ``(N, 3)``-Datensatz ``[U, I, cycle]`` als nebeneinander
-    gelegte Zyklus-Spalten dar.
-
-    Jeder Zyklus wird zu zwei Spalten (Voltage/Current) mit Header
-    ``"Voltage/ Cycle <n>"`` bzw. ``"Current/ Cycle <n>"``. Kürzere Zyklen
-    werden mit Leerzeichen-Strings auf die Länge des längsten Zyklus aufgefüllt.
-
-    Logik 1:1 aus ``Dataset-3.py``.
-    """
     cycle_numbers = np.unique(array[:, 2])
 
     cycles: list[np.ndarray] = []
@@ -127,35 +75,6 @@ def _reshape_array(array: np.ndarray) -> np.ndarray:
 
 
 def write_split_cycles(filename: str, assume_standard_csv_format: bool) -> bool:
-    """
-    Liest einen CV-Datensatz, splittet ihn in Einzelzyklen und schreibt das
-    Ergebnis in eine neue Datei (Suffix ``_CVEval_cycle_split``).
-
-    Ablauf identisch zum Original:
-
-    1. Zuerst wird versucht, die vom Potentiostaten gelabelten Zyklen via
-       :func:`cvcare.fileio.readers.load_one_cycle` zu lesen
-       (``throw_full_dataset=True``).
-    2. Schlägt das mit :class:`NoCycleInformationError` fehl, wird die
-       Zyklus-Erkennung über :func:`cvcare.fileio.readers.cycle_detection_parsing`
-       angestoßen.
-    3. Das resultierende ``(N, 3)``-Array wird per :func:`_reshape_array` in
-       eine spaltenweise Darstellung umgewandelt.
-    4. Geschrieben wird per :func:`write_standardized_data_file` in eine
-       eindeutige neue Datei (siehe :func:`_generate_unique_filename`).
-
-    Parameters
-    ----------
-    filename:
-        Pfad zur Quell-CV-Datei.
-    assume_standard_csv_format:
-        Wird unverändert an die Reader-Funktionen weitergereicht.
-
-    Returns
-    -------
-    bool
-        Erfolg des Schreibvorgangs.
-    """
     try:
         dataset = load_one_cycle(
             filename=filename,

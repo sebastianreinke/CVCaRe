@@ -1,11 +1,10 @@
 """
-cvcare.gui.tabs.export_tab
-==========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Export-Tab: Verschiedene Schreib-Aktionen aus :class:`Dataset` als
-Buttons gebündelt. Entspricht den Schreib-Menü-Punkten aus ``gui-4.py``.
+User interface for data and result export actions.
 """
-
 from __future__ import annotations
 
 import os
@@ -26,7 +25,6 @@ from cvcare.fileio.writers import write_split_cycles
 
 
 class ExportTab(QWidget):
-    """Sammelstelle für alle Export-Aktionen."""
 
     def __init__(
         self,
@@ -40,11 +38,9 @@ class ExportTab(QWidget):
         self._split_btn = QPushButton("Write loaded CVs as separate files …")
         self._split_btn.clicked.connect(self._on_split_files)
 
-        # 2) Alle CVs nebeneinander in eine Datei
         self._single_btn = QPushButton("Write loaded CVs to a single file …")
         self._single_btn.clicked.connect(self._on_single_file)
 
-        # 3) Zyklus-Split direkt aus einer Rohdatei
         self._raw_split_btn = QPushButton(
             "Split original file into cycles (without Dataset) …"
         )

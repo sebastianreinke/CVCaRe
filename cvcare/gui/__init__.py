@@ -1,16 +1,10 @@
 """
-cvcare.gui
-==========
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Grafische Benutzeroberfläche für CVCaRe, basierend auf PySide6 und
-pyqtgraph. Diese ersetzt die FreeSimpleGUI-basierte ``gui-4.py`` aus dem
-Vorgängerstand und ist sauber von der Domain-Logik in
-:mod:`cvcare.core`, :mod:`cvcare.fileio` und :mod:`cvcare.dataset` getrennt.
-
-Einstiegspunkt: ``python -m cvcare`` (siehe :mod:`cvcare.__main__`) oder
-direkt ``from cvcare.gui.app import run; run()``.
+PySide6 graphical user interface package for CVCaRe.
 """
-
 from cvcare.gui.app import CVCaReWindow, run
 
 __all__ = ["CVCaReWindow", "run"]

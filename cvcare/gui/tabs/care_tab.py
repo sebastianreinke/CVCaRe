@@ -1,20 +1,10 @@
 """
-cvcare.gui.tabs.care_tab
-========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-CaRe-Tab: Verzerrungsparameter-Analyse (Resistance / Capacitance /
-Distortion parameter) entweder analytisch oder per Optimierung.
-
-Beim Klick auf 'Berechnen' werden die aktuellen Werte aus der Sidebar
-(Scanraten, Auswertespannungen, aktiv-/Filter-Flags) erneut ausgelesen
-und in den geladenen Datensatz uebertragen -- ohne die Dateien neu zu
-lesen. So nimmt die Analyse Tippkorrekturen aus der Sidebar mit.
-
-Zusaetzlich rekonstruiert dieser Tab das per CaRe gefittete Modell-CV
-und reicht es an den PlotTab weiter, der es gestrichelt und in der
-Farbe des zugehoerigen Originalzyklus uebereinander legt.
+User interface for full-CV CaRe analysis.
 """
-
 from __future__ import annotations
 
 from typing import Callable, Optional, TYPE_CHECKING
@@ -46,7 +36,6 @@ if TYPE_CHECKING:  # pragma: no cover - nur fuer Typhinweise
 
 
 class CaReTab(QWidget):
-    """Verzerrungsparameter-Analyse fuer einen ausgewaehlten Datensatz."""
 
     def __init__(
         self,
@@ -111,13 +100,6 @@ class CaReTab(QWidget):
     # --------------------------------------------------------------- #
 
     def _refresh_dataset_from_sidebar(self, ds: Dataset) -> None:
-        """
-        Uebernimmt die aktuellen Scanraten, Auswertespannungen sowie aktiv-/
-        Filter-Flags aus der Sidebar in den geladenen Datensatz, ohne ihn
-        neu zu laden. Greift defensiv: fehlt das ``Sidebar``-Handle oder
-        eine bestimmte API auf einem CV, wird der jeweilige Schritt
-        uebersprungen.
-        """
         if self._sidebar is None:
             return
 
@@ -165,7 +147,6 @@ class CaReTab(QWidget):
             QMessageBox.warning(self, "No data", "Please load CVs first.")
             return
 
-        # Sidebar-Werte in den bestehenden Datensatz uebernehmen.
         self._refresh_dataset_from_sidebar(ds)
 
         cv_index = self._cv_index_spin.value()
@@ -206,7 +187,6 @@ class CaReTab(QWidget):
                 print(f"[CVCaRe] Could not create fit overlay: {e}")
 
     def _render_fit_overlay(self, cv, cv_index, r, c, offset, method) -> None:
-        """Konstruiert und sendet die gestrichelte Modellkurve."""
         amplitude = cv.get_amplitude()
         amplitude.units = pq.V
         period = 4 * amplitude / cv.get_scanrate(pq.V / pq.s)
@@ -219,7 +199,6 @@ class CaReTab(QWidget):
             amplitude=float(amplitude.magnitude),
         )
 
-        # Spannungs- und Stromslices in die Originallage des CVs schieben.
         voltage = fitted[:, 0] * pq.V
         voltage = voltage.rescale(cv.unit_voltage)
         v_corrector = min(cv.dataset[:, 0]) * cv.unit_voltage
@@ -235,28 +214,16 @@ class CaReTab(QWidget):
             current_corrector = offset if offset is not None else 0 * cv.unit_current
         current = current + current_corrector
 
-        # Wir geben dem PlotTab Werte in V und A (Basis-Einheiten).
         v_in_volt = voltage.rescale(pq.V).magnitude
         i_in_ampere = current.rescale(pq.A).magnitude
         self._plot_tab.show_fit_overlay(cv_index, v_in_volt, i_in_ampere)
 
     def _on_save_fit(self) -> None:
-        """Speichert das per CaRe gefittete Modell-CV als V/I-Tabelle.
-
-        Übernimmt zunächst Sidebar-Werte, führt für den ausgewählten CV die
-        Verzerrungsanalyse mit der aktuell gewählten Methode aus und schreibt
-        den daraus rekonstruierten Datensatz (in den Einheiten des Original-
-        CVs) per :func:`write_standardized_data_file` in eine vom Benutzer
-        gewählte Datei. Spannung und Strom werden – wie im Original – an die
-        Lage des Quellzyklus angeglichen, damit das gespeicherte CV mit den
-        Messdaten überlagert plotbar bleibt.
-        """
         ds = self._get_dataset()
         if ds is None or ds.count() == 0:
             QMessageBox.warning(self, "No data", "Please load CVs first.")
             return
 
-        # Sidebar-Werte spiegeln, sonst kann sich der Save vom Compute-Resultat
         # unterscheiden.
         self._refresh_dataset_from_sidebar(ds)
 
@@ -336,7 +303,6 @@ class CaReTab(QWidget):
             return
 
         # Stack into (V, I) rows; prepend a header line with units, identical
-        # to the layout that gui-4.py wrote out.
         fitted_array = np.stack(
             (voltage_slice.magnitude, current_slice.magnitude), axis=1
         )

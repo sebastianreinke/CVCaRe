@@ -1,15 +1,10 @@
 """
-cvcare.gui.widgets.cv_row
-=========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Eine einzelne Zeile in der Sidebar für genau eine zu ladende CV-Datei.
-Hält Dateipfad, Zyklusnummer, Auswertespannung, Scanrate, Use-Flag und
-Filter-Flag und meldet Änderungen per Qt-Signal.
-
-Die Zeile produziert auf Anfrage ein :class:`cvcare.dataset.CVLoadSpec`,
-das direkt an :class:`cvcare.dataset.Dataset` gereicht werden kann.
+Editable sidebar row that configures one source CV.
 """
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,23 +27,9 @@ from cvcare.dataset import CVLoadSpec
 
 
 class CVRowWidget(QFrame):
-    """
-    Eine Zeile mit allen Eingabefeldern für eine einzelne CV-Datei.
-
-    Signale
-    -------
-    changed:
-        Wird emittiert, sobald irgendein Eingabewert sich ändert. Trägt den
-        Row-Index (1-basiert) als Payload.
-    remove_requested:
-        Der Nutzer hat den ✕-Knopf gedrückt. Trägt den Row-Index.
-    """
 
     changed = Signal(int)
     remove_requested = Signal(int)
-    # Wird emittiert, wenn der Nutzer im Browse-Dialog mehrere Dateien
-    # ausgewaehlt hat. Payload: (row_index, [pfad_2, pfad_3, ...]) -- die
-    # erste Datei landet bereits in dieser Zeile, die uebrigen muss der
     # Sidebar-Container in neue Zeilen verteilen.
     additional_files_selected = Signal(int, list)
     active_changed = Signal(int, bool)
@@ -67,7 +48,6 @@ class CVRowWidget(QFrame):
         self._path_edit.setPlaceholderText("Path to CV file …")
         self._path_edit.setMinimumWidth(120)
         self._path_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        # Tooltip dient als Voll-Pfad-Anzeige, falls die Anzeige zu kurz ist.
         self._path_edit.textChanged.connect(
             lambda txt, w=self._path_edit: w.setToolTip(txt)
         )
@@ -169,7 +149,6 @@ class CVRowWidget(QFrame):
         return self._index
 
     def set_index(self, new_index: int) -> None:
-        """Wird vom Sidebar aufgerufen, wenn Zeilen umnummeriert werden."""
         self._index = new_index
         self._lbl_no.setText(f"#{new_index}")
 
@@ -201,7 +180,6 @@ class CVRowWidget(QFrame):
             return None
 
     def scanrate(self) -> Optional[float]:
-        """Scanrate in mV/s; ``None`` wenn ungültig oder leer."""
         raw = self._scanrate_edit.text().strip().replace(",", ".")
         if not raw:
             return None
@@ -250,7 +228,6 @@ class CVRowWidget(QFrame):
         )
         if not paths:
             return
-        # Erste Datei in die aktuelle Zeile, weitere an die Sidebar weiterreichen.
         self._path_edit.setText(paths[0])
         if len(paths) > 1:
             self.additional_files_selected.emit(self._index, list(paths[1:]))

@@ -1,31 +1,10 @@
 """
-cvcare.gui.app
-==============
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Hauptfenster der CVCaRe-GUI.
-
-Layout (Logo + Sidebar links, Plot rechts oben, Funktions-Tabs rechts unten):
-
-    +---------------------------------------------------------------+
-    | Menue (Datei / Ansicht / Hilfe)                               |
-    +-----------------+---------------------------------------------+
-    | [ Logo ]        |                Plot (immer sichtbar)        |
-    +-----------------+                                             |
-    | Sidebar         |                                             |
-    | - Modus         +---------------------------------------------+
-    | - CSV-Format    |  Tabs (links angeordnet):                   |
-    | - +Zeile, ...   |   - Kapazitaet                              |
-    | - Laden         |   - CaRe                                    |
-    | - CV-Liste      |   - Integral / Bias / Export                |
-    +-----------------+---------------------------------------------+
-    | Statusleiste                                                  |
-    +---------------------------------------------------------------+
-
-Das Fenster haelt die geladene :class:`cvcare.dataset.Dataset`-Instanz und
-gibt den Tabs einen ``get_dataset()``-Callback mit, damit deren Berechnungen
-immer auf dem aktuellen Datensatz arbeiten.
+Application main window, GUI layout, menu actions, and tab coordination.
 """
-
 from __future__ import annotations
 
 import sys
@@ -70,7 +49,6 @@ from cvcare.gui.widgets import LogoWidget, SidebarWidget
 
 
 class CVCaReWindow(QMainWindow):
-    """Hauptfenster der Anwendung."""
 
     _SHOW_BIAS_TAB = False
 
@@ -210,7 +188,6 @@ class CVCaReWindow(QMainWindow):
         self._refresh_theme_dependent_widgets()
 
     def _refresh_theme_dependent_widgets(self) -> None:
-        # Aufrufen, wann immer das Theme wechselt -- update Logo + Plot.
         self._logo.apply_theme(self._theme)
         self._plot_tab.apply_theme(self._theme)
 
@@ -320,13 +297,10 @@ class CVCaReWindow(QMainWindow):
 
 
 def run(argv: Optional[list[str]] = None) -> int:
-    """Startet die Anwendung. Rueckgabe: Qt-Exit-Code."""
     if argv is None:
         argv = sys.argv
     app = QApplication.instance() or QApplication(argv)
 
-    # Theme vor dem Aufbau der Widgets setzen, damit pyqtgraph beim ersten
-    # Erstellen schon den passenden Hintergrund nutzt.
     initial_theme = get_saved_theme()
     apply_theme(app, initial_theme)
 

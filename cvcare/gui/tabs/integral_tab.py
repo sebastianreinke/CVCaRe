@@ -1,21 +1,10 @@
 """
-cvcare.gui.tabs.integral_tab
-============================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Integral-Tab. Berechnet das Integral I(U)\u00b7dU im w\u00e4hlbaren
-Spannungsfenster f\u00fcr einen w\u00e4hlbaren Datensatz. Nutzt
-:meth:`cvcare.core.cv.FullCV.integrate_one_direction` aus dem unver\u00e4nderten
-Domain-Modul.
-
-The lower/upper voltage bound fields are plain :class:`QLineEdit` widgets,
-not spin boxes. A ``QAbstractSpinBox`` is inherently "active" -- scroll-wheel
-value changes, up/down-arrow stepping, click-to-select-all-on-focus, and a
-coupling between typed precision and displayed precision -- none of which is
-wanted for a free-form numeric bound. A plain line edit does nothing to the
-text except what the user types; validation happens only at compute time
-(via :meth:`_parse_bound`), which never rewrites the field's contents.
+User interface for directional CV current integration.
 """
-
 from __future__ import annotations
 
 from typing import Callable, Optional, TYPE_CHECKING
@@ -42,7 +31,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class IntegralTab(QWidget):
-    """Berechnet das Integral I\u00b7dU im Spannungsfenster f\u00fcr genau einen CV."""
 
     _DEFAULT_LOWER_V = "-0.2"
     _DEFAULT_UPPER_V = "0.2"

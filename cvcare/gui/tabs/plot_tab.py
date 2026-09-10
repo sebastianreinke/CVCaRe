@@ -1,19 +1,10 @@
 """
-cvcare.gui.tabs.plot_tab
-========================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Plot-Tab mit pyqtgraph: zeichnet alle geladenen CVs in einer eingebetteten
-``PlotWidget``-Instanz. Achsentitel, Legende und Filter-Toggle sind oben
-als kleines Form-Layout sichtbar.
-
-Die Farben sind dieselben wie im Original (matplotlib-tab10 + ein paar
-zusaetzliche Standardfarben).
-
-Zusaetzlich kann ueber :meth:`show_fit_overlay` ein per CaRe rekonstruiertes
-Modell-CV gestrichelt in der Originalfarbe seines Quell-Zyklus eingeblendet
-werden.
+Shared pyqtgraph view for CVs, model curves, mirrored branches, and integration shading.
 """
-
 from __future__ import annotations
 
 from typing import Dict, Iterable, Optional, Tuple
@@ -36,7 +27,6 @@ from cvcare.core.cv import CV
 from cvcare.gui.theme import ThemeMode, palette_for
 
 
-# Originalfarbenzyklus aus gui-4.py.
 _PLOT_COLORS = [
     "#1f77b4",  # tab:blue
     "#ff7f0e",  # tab:orange
@@ -60,7 +50,6 @@ _PLOT_COLORS = [
 
 
 class PlotTab(QWidget):
-    """Eingebetteter pyqtgraph-Plot mit CV-Uebersicht."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -80,7 +69,6 @@ class PlotTab(QWidget):
         self._plot.showGrid(x=True, y=True, alpha=0.3)
         self._plot.addLegend(offset=(10, 10))
 
-        # Initialer Achsenaufbau ueber den robusten Pfad in _update_axes:
         for axis_name in ("bottom", "left"):
             axis = self._plot.getAxis(axis_name)
             axis.enableAutoSIPrefix(False)
@@ -144,11 +132,6 @@ class PlotTab(QWidget):
     # --------------------------------------------------------------- #
 
     def show_cvs(self, cvs: Iterable[CV]) -> None:
-        """Zeichnet die uebergebene Liste von CVs in der aktuellen Reihenfolge.
-
-        Verwirft beim Aufruf alle aktiven Fit-Overlays, da ein neu geladener
-        Datensatz die zugehoerigen Indizes nicht mehr garantiert.
-        """
         self._current_cvs = list(cvs)
         self._fit_overlays.clear()
         self._integral_shadings.clear()
@@ -183,10 +166,6 @@ class PlotTab(QWidget):
         x_values: np.ndarray,
         y_values_in_amperes: np.ndarray,
     ) -> None:
-        """
-        Zeigt eine gestrichelte Modellkurve fuer den CV mit dem gegebenen
-        Index. Strom wird intern (wie der Originalplot) in mA umgerechnet.
-        """
         x = np.asarray(x_values)
         y = np.asarray(y_values_in_amperes) * 1e3
         self._fit_overlays[int(cv_index)] = (x, y)
@@ -240,7 +219,6 @@ class PlotTab(QWidget):
         self._replot_current_data()
 
     def apply_theme(self, mode: ThemeMode) -> None:
-        """Wendet das aktuelle Theme auf den Plot an (Hintergrund + Achsenfarbe)."""
         p = palette_for(mode)
         self._plot.setBackground(p["plot_bg"])
         fg = QColor(p["plot_fg"])
@@ -257,12 +235,7 @@ class PlotTab(QWidget):
     # --------------------------------------------------------------- #
 
     def _update_axes(self) -> None:
-        # pyqtgraph kombiniert beim Aufruf von setLabel(units=...) das Label
-        # ueber autoSIPrefix mit einem zusaetzlichen Milli/Mikro-Praefix.
-        # Das ist fuer CVs unerwuenscht (Daten liegen schon in der eingegebenen
-        # Einheit vor). Wir setzen Achsentitel deshalb als Klartext und
         # garantieren ueber autoSIPrefix=False sowie labelUnitPrefix='',
-        # dass nichts heimlich umskaliert wird.
         x_title = self._x_title_edit.text() or "Potential"
         y_title = self._y_title_edit.text() or "Current"
         x_unit = self._x_unit_edit.text().strip()
@@ -287,8 +260,6 @@ class PlotTab(QWidget):
 
     def _replot_current_data(self) -> None:
         self._plot.clear()
-        # addLegend muss nach clear neu angeheftet werden, da PlotItem.clear()
-        # die Legende mit entfernt.
         self._plot.addLegend(offset=(10, 10))
         self._update_axes()
         use_filter = self._filter_cb.isChecked()
@@ -333,7 +304,6 @@ class PlotTab(QWidget):
             name = f"#{cv.get_index()} ({type(cv).__name__})"
             self._plot.plot(x, y, pen=pen, name=name)
 
-        # Overlays in the same colour as the original cycle, dashed.
         for cv_index, (x, y) in self._fit_overlays.items():
             if not _is_visible(cv_index):
                 continue

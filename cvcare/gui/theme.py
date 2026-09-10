@@ -1,21 +1,10 @@
 """
-cvcare.gui.theme
-================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Light-/Dark-Theme-Verwaltung fuer die GUI.
-
-Das Theme wirkt auf zwei Ebenen:
-
-1. Die Qt-Anwendung selbst (Palette + Stylesheet) -- so wechseln Fenster,
-   Buttons, Eingabefelder ihre Farbe.
-2. Den pyqtgraph-Plot. pyqtgraph haelt globale Defaults (foreground /
-   background), die wir hier setzen, sowie pro-Achse Einstellungen, die
-   :class:`cvcare.gui.tabs.plot_tab.PlotTab` beim Theme-Wechsel mitliest.
-
-Der gewaehlte Modus wird via :class:`QSettings` unter
-``CVCaRe/Appearance/Theme`` persistiert.
+Light/dark palette selection and Qt stylesheet generation.
 """
-
 from __future__ import annotations
 
 from enum import Enum
@@ -32,7 +21,6 @@ class ThemeMode(str, Enum):
 
 
 # --------------------------------------------------------------------------- #
-# Farbtabelle. Die Werte wurden so gewaehlt, dass sie zum Magenta-Akzent des
 # Logos passen.
 # --------------------------------------------------------------------------- #
 _PALETTES = {
@@ -81,7 +69,6 @@ def save_theme(mode: ThemeMode) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Anwendung des Themes
 # --------------------------------------------------------------------------- #
 
 
@@ -108,7 +95,6 @@ def apply_theme(app: QApplication, mode: ThemeMode) -> None:
     palette.setColor(QPalette.PlaceholderText, QColor(p["muted"]))
     app.setPalette(palette)
 
-    # Stylesheet erweitert die Palette dort, wo Qt Defaults nicht reicht.
     app.setStyleSheet(
         f"""
         QMainWindow, QWidget {{
@@ -252,7 +238,6 @@ def apply_theme(app: QApplication, mode: ThemeMode) -> None:
         """
     )
 
-    # pyqtgraph-Defaults muessen vor dem Bauen neuer PlotWidgets greifen.
     pg.setConfigOption("background", p["plot_bg"])
     pg.setConfigOption("foreground", p["plot_fg"])
 

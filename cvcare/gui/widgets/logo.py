@@ -1,12 +1,10 @@
 """
-cvcare.gui.widgets.logo
-=======================
+This file is part of CVCaRe.
+Copyright (C) 2022-2026 Sebastian Reinke
+Licensed under the GNU General Public License v3 or later.
 
-Kleines QLabel, das je nach aktivem Theme ``Images/CVCaRe_light.png`` oder
-``Images/CVCaRe_dark.png`` anzeigt. Faellt eine Datei aus, wird ein textueller
-Platzhalter gezeigt, damit die App auch ohne mitgelieferte Assets startet.
+Theme-aware logo display widget.
 """
-
 from __future__ import annotations
 
 from typing import Optional
