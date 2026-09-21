@@ -1,0 +1,2 @@
+echo "Images/" >> .gitignore
+echo "dist/" >> .gitignore
