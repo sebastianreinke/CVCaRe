@@ -1,2 +1,6 @@
 echo "Images/" >> .gitignore
 echo "dist/" >> .gitignorelaunch_cvcare.py
+dist/
+Images/
+__pycache__/
+*.pyc
