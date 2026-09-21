@@ -44,6 +44,7 @@ from cvcare.gui.theme import (
     get_saved_theme,
     logo_pixmap_for,
     save_theme,
+    palette_for,
 )
 from cvcare.gui.widgets import LogoWidget, SidebarWidget
 
@@ -204,12 +205,17 @@ class CVCaReWindow(QMainWindow):
                 pix.scaledToHeight(72, Qt.SmoothTransformation)
             )
 
+        accent = palette_for(get_saved_theme())["accent"]
+
         text_label = QLabel(
             f"<h3>CVCaRe {__version__}</h3>"
             "<p>Cyclic voltammogram analysis tool.</p>"
             "<p>Original author: Sebastian Reinke. Released under GPLv3.</p>"
+            f'<p>Github: <a href="https://github.com/sebastianreinke/CVCaRe" '
+            f'style="color:{accent};">https://github.com/sebastianreinke/CVCaRe</a></p>'
             "<p>GUI: PySide6 (LGPL) and pyqtgraph (MIT).</p>"
         )
+        text_label.setOpenExternalLinks(True)
         text_label.setTextFormat(Qt.RichText)
         text_label.setWordWrap(True)
 
